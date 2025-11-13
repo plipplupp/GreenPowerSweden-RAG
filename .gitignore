@@ -1,0 +1,21 @@
+# ----------------------------------------------------------------------
+# Exkludera stora data-mappar och virtuella miljöer
+# ----------------------------------------------------------------------
+
+# Exkludera all rådata. Detta löser det akuta filnamnsproblemet OCH storleksbegränsningen.
+# Git ignorerar nu alla filer i denna mapp.
+data
+
+# Exkludera den virtuella miljön. Den är stor och onödig att ladda upp.
+.venv/
+__pycache__/
+
+# ----------------------------------------------------------------------
+# Inkludera de bearbetade filerna du VILL HA
+# ----------------------------------------------------------------------
+
+# UNDANTAG (NEGERING): Inkludera de bearbetade filerna du vill ha.
+# Vi måste först göra ett undantag för mappen 02_processed
+# och sedan ett undantag för filen, då 'data/' ignoreras rekursivt.
+!data/02_processed/
+!data/02_processed/pdf_analysis_report.csv
