@@ -10,6 +10,9 @@ data
 .venv/
 __pycache__/
 
+# Exkludera filen med API-nycklar
+.env
+
 # ----------------------------------------------------------------------
 # Inkludera de bearbetade filerna du VILL HA
 # ----------------------------------------------------------------------
