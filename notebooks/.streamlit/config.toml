@@ -1,0 +1,6 @@
+# .streamlit/config.toml
+
+[server]
+# Ökar maximal meddelandestorlek från standard 14 MB till 100 MB.
+# Detta är nödvändigt för att hantera stora filer (som din stora PDF).
+maxMessageSize = 250
