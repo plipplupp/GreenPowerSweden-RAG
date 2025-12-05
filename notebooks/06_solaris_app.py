@@ -194,70 +194,7 @@ def get_rag_response(question, system_prompt, k=10):
     answer = chain.invoke({"context": context_text, "question": question})
     return answer, docs
 
-# --- NY FUNKTION FÖR ATT REMAPPA KÄLLHÄNVISNINGAR ---
-def remap_citations(response, all_docs):
-    """
-    1. Hittar alla unika citerade ID:n (t.ex. '8') i svaret.
-    2. Skapar en sekventiell mappning (t.ex. '8' -> '1').
-    3. Ersätter de gamla ID:n med de nya sekventiella ID:n i svarstexten.
-    4. Returnerar den remappade texten och listan över de unika, citerade dokumenten.
-    
-    UPPDATERING: Hanterar nu fall där LLM refererar till ID:n utanför intervallet (1 till k).
-    """
-    # 1. Hitta alla unika ursprungliga ID:n som citerades, i den ordning de dök upp.
-    # Vi fångar alla nummer inom källhänvisningen
-    cited_ids_str = re.findall(r"\*\*\[Källa:\s*(\d+)\]\*\*", response)
-    unique_original_ids = []
-    
-    # Skapa en lista över unika ID:n, bevarar ordningen
-    for id_str in cited_ids_str:
-        try:
-            id_int = int(id_str)
-            if id_int not in unique_original_ids:
-                unique_original_ids.append(id_int)
-        except ValueError:
-            continue
-
-    original_cited_docs = []
-    citation_map = {}
-    
-    # 2. Skapa den sekventiella listan av dokument och mappningen.
-    for new_id, original_id in enumerate(unique_original_ids, start=1):
-        doc_index = original_id - 1
-        
-        # Säkerhetskontroll: Vi måste ha hämtat dokumentet (0 <= index < len(all_docs))
-        # (dvs. original_id måste vara inom intervallet 1 till k)
-        if 0 <= doc_index < len(all_docs):
-            original_cited_docs.append(all_docs[doc_index])
-            citation_map[original_id] = new_id
-        # Annars, ignorera det, det är ett påhittat ID av LLM.
-
-    # 3. Genomför substitution i texten (för de giltiga ID:n)
-    remapped_response = response
-    
-    for original_id, new_id in citation_map.items():
-        # RegEx-mönster som matchar exakt det gamla ID:t i källformatet
-        pattern = r"\*\*\[Källa:\s*" + re.escape(str(original_id)) + r"\s*\]\*\*"
-        # Ersätt med det nya sekventiella ID:t
-        replacement = f"**[Källa: {new_id}]**"
-        # Notera: Vi använder re.sub i stället för str.replace för att hantera flera förekomster
-        remapped_response = re.sub(pattern, replacement, remapped_response)
-        
-    # Extra steg: Ta bort referenser som inte kunde mappas (de påhittade)
-    for id_str in cited_ids_str:
-        try:
-            original_id = int(id_str)
-            # Om original_id fanns i texten men INTE i citation_map, ta bort det.
-            if original_id not in citation_map:
-                # Ta bort hela källhänvisningen (utrymme + **[Källa: X]**)
-                # Lägger till \s* före den avslutande hakparentesen (r"\s*\]")
-                pattern = r"\s*\*\*\[Källa:\s*" + re.escape(str(original_id)) + r"\s*\]\*\*"
-                # Ersätt med en tom sträng för att ta bort den
-                remapped_response = re.sub(pattern, "", remapped_response)
-        except ValueError:
-            continue
-            
-    return remapped_response, original_cited_docs
+# --- Funktionen remap_citations har tagits bort i den här versionen. ---
 
 # ==========================================
 # 4. SIDA: CHATT (Research)
@@ -294,27 +231,26 @@ def show_chat_page():
             with chat_container:
                 with st.chat_message("assistant"):
                     with st.spinner("Söker och analyserar..."):
-                        # Justerar systemprompten för att minska 'snällheten' i det initiala svaret, för att öka sökprecitionen.
+                        
+                        # --- NY & FÖRENKLAD KÄLLHANTERING ---
                         sys_prompt = "Du är Solaris Legal. Svara professionellt på svenska och använd sakliga termer."
+                        # Få svaret (response) och ALLA 10 hämtade dokument (docs)
                         response, docs = get_rag_response(prompt, sys_prompt, k=10)
                         
-                        # --- 3. KÄLLHANTERING OCH RE-INDEXERING ---
-                        # Remappa LLM:s svar och få den sekventiella listan av citerade dokument
-                        remapped_response, cited_docs = remap_citations(response, docs)
-                        # Skriv ut den remappade texten
-                        st.markdown(remapped_response) 
+                        # Skriv ut det ursprungliga svaret (som nu innehåller ID 1-10)
+                        st.markdown(response) 
 
             # 4. State-uppdatering
             
             # Hantera negativt svar (tömmer källor om LLM nekar)
             NEGATIVE_PHRASE = "Jag har granskat de tillhandahållna dokumenten"
-            if remapped_response.strip().startswith(NEGATIVE_PHRASE):
+            if response.strip().startswith(NEGATIVE_PHRASE):
                 final_sources = []
             else:
-                final_sources = cited_docs
+                final_sources = docs # Spara ALLA 10 hämtade dokument, oavsett citering
             
-            # Spara den remappade texten i historiken
-            st.session_state.messages.append({"role": "assistant", "content": remapped_response}) 
+            # Spara det RÅA svaret i historiken
+            st.session_state.messages.append({"role": "assistant", "content": response}) 
             st.session_state.current_sources = final_sources
             st.session_state.selected_pdf = None 
             
@@ -347,26 +283,27 @@ def show_chat_page():
             st.markdown(f"**Visar:** `{doc_path.name}` (Sida {page})")
             
             if doc_path.exists():
-                # KORRIGERAD RAD: Byt pages_to_stream=[page] mot page=page
                 pdf_viewer(str(doc_path), height=800, width="100%")
             else:
                 st.error(f"Fil saknas: {doc_path}")
 
         # Scenario B: Visa Lista
         elif st.session_state.current_sources:
-            # st.session_state.current_sources är nu den sekventiellt ordnade listan av CITERADE chunks.
+            
+            # NY FÖRKLARING
+            st.info(f"Listan visar de **{len(st.session_state.current_sources)}** mest relevanta dokumenten som analyserades i sökningen. Källhänvisningarna i chatten (t.ex. **[Källa: 7]**) refererar till dokumentets nummer i denna lista.")
             
             sources_container = st.container(border=False) 
             
             with sources_container:
-                # Loopar över den remappade listan, där i+1 är det nya käll-ID:t
+                # Loopar över ALLA dokument, där i+1 är det ursprungliga DOKUMENT ID:t
                 for i, doc in enumerate(st.session_state.current_sources):
                     citation_id = i + 1
                     path_str = doc.metadata.get("full_path")
                     page_num = doc.metadata.get("page")
                     full_os_path = RAW_DATA_DIR / path_str
                     
-                    # Källkortet (Visar nu det nya sekventiella ID:t)
+                    # Källkortet 
                     with st.container():
                         st.markdown(f"""
                         <div class="source-card">
@@ -415,11 +352,11 @@ def show_application_page():
             size = st.text_input("Storlek/Effekt", value=default_inputs.get("size", "45 hektar, ca 30 MW"))
             
             marktyp = st.text_area("Beskriv marktypen", 
-                                   value=default_inputs.get("marktyp", "Lågproduktiv jordbruksmark som delvis är igenväxt. Ligger nära skogskant."),
-                                   height=100)
+                                    value=default_inputs.get("marktyp", "Lågproduktiv jordbruksmark som delvis är igenväxt. Ligger nära skogskant."),
+                                    height=100)
             naturvarden = st.text_area("Naturvärden & Skydd", 
-                                       value=default_inputs.get("naturvarden", "Området ligger inte inom Natura 2000. Finns diken i söder."),
-                                       height=100)
+                                        value=default_inputs.get("naturvarden", "Området ligger inte inom Natura 2000. Finns diken i söder."),
+                                        height=100)
 
         col_left, col_center, col_right = st.columns([1, 3, 1])
         
@@ -502,9 +439,8 @@ def main():
         if LOGO_PATH.exists():
             if LOGO_PATH.suffix.lower() == '.svg':
                 try:
-                    # Inget inbyggt sätt att visa SVG direkt, st.image kan fungera om bibliotek finns
-                    # Men för Colab/standard Streamlit är .png/jpg säkrare
-                    st.header("Solaris Insight") # Fallback
+                    # Fallback till text om SVG inte kan renderas
+                    st.header("Solaris Insight")
                 except:
                     st.header("Solaris Insight")
             else:
@@ -514,11 +450,11 @@ def main():
         
         st.divider()
         
-        if st.button("🔎  Sök & Analys", type="primary" if st.session_state.current_page == "Sök & Analys" else "secondary"):
+        if st.button("🔎  Sök & Analys", type="primary" if st.session_state.current_page == "Sök & Analys" else "secondary"):
             st.session_state.current_page = "Sök & Analys"
             st.rerun()
             
-        if st.button("📝  Skapa Ansökan", type="primary" if st.session_state.current_page == "Skapa Ansökan" else "secondary"):
+        if st.button("📝  Skapa Ansökan", type="primary" if st.session_state.current_page == "Skapa Ansökan" else "secondary"):
             st.session_state.current_page = "Skapa Ansökan"
             st.rerun()
 
