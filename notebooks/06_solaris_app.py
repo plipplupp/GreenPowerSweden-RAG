@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 import pandas as pd
-import re 
+import re
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -19,7 +19,7 @@ from streamlit_pdf_viewer import pdf_viewer
 # 1. KONFIGURATION OCH SETUP
 # ==========================================
 st.set_page_config(
-    page_title="Solaris Insight",
+    page_title="Solaris",
     page_icon="☀️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -29,7 +29,7 @@ load_dotenv()
 
 # Sökvägar
 BASE_DIR = Path(r"C:\Users\Dator\Documents\Data_Science\11_Examensarbete\green_power_sweden")
-DB_DIR = BASE_DIR / "data" / "03_vector_db" / "green_power_sweden_db" 
+DB_DIR = BASE_DIR / "data" / "03_vector_db" / "green_power_sweden_db"
 RAW_DATA_DIR = BASE_DIR / "data" / "01_raw"
 
 # --- INITIERA SESSION STATE ---
@@ -44,7 +44,7 @@ if "selected_pdf" not in st.session_state:
 if "selected_page" not in st.session_state:
     st.session_state.selected_page = 1
 if "application_draft" not in st.session_state:
-    st.session_state.application_draft = "" 
+    st.session_state.application_draft = ""
 if "application_inputs" not in st.session_state:
     st.session_state.application_inputs = {}
 
@@ -61,7 +61,7 @@ st.markdown("""
         padding-left: 15px;
         transition: all 0.25s ease;
     }
-    
+   
     section[data-testid="stSidebar"] button:hover {
         background-color: #e3f2fd;
         border-color: #2196F3;
@@ -97,7 +97,7 @@ st.markdown("""
         background-color: #f0f7ff;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    
+   
     /* --- NEDLADDNINGSKNAPP (Grön) --- */
     div[data-testid="stDownloadButton"] > button {
         background-color: #4CAF50 !important;
@@ -130,7 +130,7 @@ def load_resources():
         model_kwargs={'device': 'cpu'},
         encode_kwargs={'normalize_embeddings': False}
     )
-    
+   
     if not DB_DIR.exists():
         st.error(f"Kunde inte hitta databasen på: {DB_DIR}")
         return None, None
@@ -139,12 +139,12 @@ def load_resources():
         persist_directory=str(DB_DIR),
         embedding_function=embedding_model
     )
-    
+   
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash",
         temperature=0.3
     )
-    
+   
     return vectordb, llm
 
 vectordb, llm = load_resources()
@@ -167,12 +167,12 @@ def get_rag_response(question, system_prompt, k=10):
     retriever = vectordb.as_retriever(search_kwargs={"k": k})
     docs = retriever.invoke(question)
     context_text = format_docs_with_sources(docs)
-    
+   
     prompt_template = f"""
     {system_prompt}
-    
+   
     VIKTIGA INSTRUKTIONER FÖR ANALYS:
-    1. Granska den tillhandahållna kontexten noggrant. 
+    1. Granska den tillhandahållna kontexten noggrant.
     2. Om kontexten INTE innehåller **relevant** information som kan besvara FRÅGAN, svara då: "Jag har granskat de tillhandahållna dokumenten och kan konstatera att det inte finns tillräcklig information om [ämnet i frågan] i dessa."
     3. Svara ALDRIG på en fråga om kontexten är tom eller irrelevant.
 
@@ -181,14 +181,14 @@ def get_rag_response(question, system_prompt, k=10):
     2. När du använder information från ett dokument, lägg till en hänvisning i fetstil direkt efter meningen.
     3. Formatet SKA vara: **[Källa: X]** (där X är dokumentets ID-nummer).
     4. Skriv INTE ut filnamnet i löptexten, använd bara numret.
-    
+   
     ANVÄND FÖLJANDE KONTEXT:
     {{context}}
-    
+   
     FRÅGA:
     {{question}}
     """
-    
+   
     prompt = ChatPromptTemplate.from_template(prompt_template)
     chain = prompt | llm | StrOutputParser()
     answer = chain.invoke({"context": context_text, "question": question})
@@ -200,12 +200,12 @@ def get_rag_response(question, system_prompt, k=10):
 # 4. SIDA: CHATT (Research)
 # ==========================================
 def show_chat_page():
-    
-    st.markdown("# 👋 Välkommen till Solaris Insight")
+   
+    st.markdown("# Välkommen till chatbotten Solaris ☀️🔋")
     st.markdown("### Din AI-assistent för tillståndsprocesser och solcellsparker.")
     st.divider()
 
-    col_chat, col_ref = st.columns([1, 1], gap="large") 
+    col_chat, col_ref = st.columns([1, 1], gap="large")
 
     # --- VÄNSTER: CHATT ---
     with col_chat:
@@ -238,7 +238,7 @@ def show_chat_page():
                         response, docs = get_rag_response(prompt, sys_prompt, k=10)
                         
                         # Skriv ut det ursprungliga svaret (som nu innehåller ID 1-10)
-                        st.markdown(response) 
+                        st.markdown(response)
 
             # 4. State-uppdatering
             
@@ -250,15 +250,15 @@ def show_chat_page():
                 final_sources = docs # Spara ALLA 10 hämtade dokument, oavsett citering
             
             # Spara det RÅA svaret i historiken
-            st.session_state.messages.append({"role": "assistant", "content": response}) 
+            st.session_state.messages.append({"role": "assistant", "content": response})
             st.session_state.current_sources = final_sources
-            st.session_state.selected_pdf = None 
+            st.session_state.selected_pdf = None
             
             # 5. Rerun för att uppdatera högerspalten
             st.rerun()
             
         # Rensa-knapp
-        st.write("") 
+        st.write("")
         if st.session_state.messages:
             if st.button("🗑️ Rensa historik", type="secondary", use_container_width=True):
                 st.session_state.messages = []
@@ -293,7 +293,7 @@ def show_chat_page():
             # NY FÖRKLARING
             st.info(f"Listan visar de **{len(st.session_state.current_sources)}** mest relevanta dokumenten som analyserades i sökningen. Källhänvisningarna i chatten (t.ex. **[Källa: 7]**) refererar till dokumentets nummer i denna lista.")
             
-            sources_container = st.container(border=False) 
+            sources_container = st.container(border=False)
             
             with sources_container:
                 # Loopar över ALLA dokument, där i+1 är det ursprungliga DOKUMENT ID:t
@@ -303,7 +303,7 @@ def show_chat_page():
                     page_num = doc.metadata.get("page")
                     full_os_path = RAW_DATA_DIR / path_str
                     
-                    # Källkortet 
+                    # Källkortet
                     with st.container():
                         st.markdown(f"""
                         <div class="source-card">
@@ -319,7 +319,7 @@ def show_chat_page():
                             # Öppna PDF till den citerade sidan
                             if st.button(f"📄 Öppna PDF (Sid {page_num})", key=f"open_{i}"):
                                 st.session_state.selected_pdf = full_os_path
-                                st.session_state.selected_page = page_num 
+                                st.session_state.selected_page = page_num
                                 st.rerun()
                         
                         with c_path:
@@ -351,10 +351,10 @@ def show_application_page():
             kommun = st.text_input("Kommun & Län", value=default_inputs.get("kommun", "Kalmar kommun, Kalmar län"))
             size = st.text_input("Storlek/Effekt", value=default_inputs.get("size", "45 hektar, ca 30 MW"))
             
-            marktyp = st.text_area("Beskriv marktypen", 
+            marktyp = st.text_area("Beskriv marktypen",
                                     value=default_inputs.get("marktyp", "Lågproduktiv jordbruksmark som delvis är igenväxt. Ligger nära skogskant."),
                                     height=100)
-            naturvarden = st.text_area("Naturvärden & Skydd", 
+            naturvarden = st.text_area("Naturvärden & Skydd",
                                         value=default_inputs.get("naturvarden", "Området ligger inte inom Natura 2000. Finns diken i söder."),
                                         height=100)
 
@@ -386,12 +386,12 @@ def show_application_page():
             sys_prompt = "Du ska skriva avsnittet 'Lokalisering' och vara saklig. Använd fetstil för källhänvisning [Källa: X]."
             
             # NOTE: Vi använder get_rag_response, men remapping görs EJ här.
-            text_loc, docs_loc = get_rag_response(query_loc, sys_prompt) 
+            text_loc, docs_loc = get_rag_response(query_loc, sys_prompt)
             st.write("Klar.")
             
             # Använder den enklare referenslistan här, utan remapping
             full_draft_text += f"\n## 1. LOKALISERING & MARKVAL\n{text_loc}\n\n**Referenser för Lokalisering och markval (Ursprungliga ID:n):**\n"
-            for i, d in enumerate(docs_loc): 
+            for i, d in enumerate(docs_loc):
                 full_draft_text += f"- [{i+1}] {d.metadata.get('full_path')} (Sid {d.metadata.get('page')})\n"
         
         # --- DEL 2 ---
@@ -404,7 +404,7 @@ def show_application_page():
             st.write("Klar.")
 
             full_draft_text += f"\n## 2. MILJÖPÅVERKAN OCH SKYDDSÅTGÄRDER\n{text_env}\n\n**Referenser för Miljöpåverkan (Ursprungliga ID:n):**\n"
-            for i, d in enumerate(docs_env): 
+            for i, d in enumerate(docs_env):
                 full_draft_text += f"- [{i+1}] {d.metadata.get('full_path')} (Sid {d.metadata.get('page')})\n"
 
         st.session_state.application_draft = full_draft_text
@@ -423,7 +423,7 @@ def show_application_page():
                 data=st.session_state.application_draft,
                 file_name=f"Ansokan_{safe_name}.md",
                 mime="text/markdown",
-                type="primary", 
+                type="primary",
                 use_container_width=True
             )
             if st.button("🗑️ Rensa Genererat Utkast", use_container_width=True, type="secondary"):
@@ -434,27 +434,23 @@ def show_application_page():
 # 6. NAVIGATION & MENY
 # ==========================================
 def main():
-    LOGO_PATH = BASE_DIR / "assets" / "gps-logo.svg" 
+    # --- HÄR ÄR DIN ÅTERINFÖRDA KOD FÖR LOGGAN ---
+    # Logga i sidopanelen
+    LOGO_PATH = BASE_DIR / "assets" / "gps-logo.svg"
+
     with st.sidebar:
         if LOGO_PATH.exists():
-            if LOGO_PATH.suffix.lower() == '.svg':
-                try:
-                    # Fallback till text om SVG inte kan renderas
-                    st.header("Solaris Insight")
-                except:
-                    st.header("Solaris Insight")
-            else:
-                st.image(str(LOGO_PATH), use_container_width=True)
+            st.image(str(LOGO_PATH), use_container_width=True) # Visar loggan
         else:
-            st.header("Solaris Insight")
+            st.header("Chatboten Solaris") # Fallback-titel om loggan inte hittas
         
         st.divider()
         
-        if st.button("🔎  Sök & Analys", type="primary" if st.session_state.current_page == "Sök & Analys" else "secondary"):
+        if st.button("🔎  Sök & Analys", type="primary" if st.session_state.current_page == "Sök & Analys" else "secondary"):
             st.session_state.current_page = "Sök & Analys"
             st.rerun()
             
-        if st.button("📝  Skapa Ansökan", type="primary" if st.session_state.current_page == "Skapa Ansökan" else "secondary"):
+        if st.button("📝  Skapa Ansökan", type="primary" if st.session_state.current_page == "Skapa Ansökan" else "secondary"):
             st.session_state.current_page = "Skapa Ansökan"
             st.rerun()
 
