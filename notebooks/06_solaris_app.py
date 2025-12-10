@@ -1,9 +1,12 @@
 import streamlit as st
 import os
 import pandas as pd
-import re
+import hashlib
 from pathlib import Path
 from dotenv import load_dotenv
+import io
+import zipfile
+import tempfile
 
 # LangChain & Chroma
 from langchain_chroma import Chroma
@@ -16,6 +19,89 @@ from langchain_core.output_parsers import StrOutputParser
 from streamlit_pdf_viewer import pdf_viewer
 
 # ==========================================
+# 0. AUTENTISERING
+# ==========================================
+
+def hash_password(password):
+    """Hash ett lösenord med SHA-256"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(password, hashed_password):
+    """Verifiera ett lösenord mot en hash"""
+    return hash_password(password) == hashed_password
+
+def check_authentication():
+    """Kontrollera om användaren är inloggad"""
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+    return st.session_state.authenticated
+
+def login_page():
+    """Visa inloggningssida"""
+    st.markdown("# 🔐 Logga in till Solaris")
+    st.markdown("### Din AI-assistent för tillståndsprocesser och solcellsparker")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("---")
+        username = st.text_input("Användarnamn", key="login_username")
+        password = st.text_input("Lösenord", type="password", key="login_password")
+        
+        if st.button("Logga in", type="primary", use_container_width=True):
+            # Hämta användaruppgifter från Streamlit secrets eller environment
+            valid_users = get_user_credentials()
+            
+            if username in valid_users:
+                if verify_password(password, valid_users[username]):
+                    st.session_state.authenticated = True
+                    st.session_state.username = username
+                    st.success("Inloggning lyckades!")
+                    st.rerun()
+                else:
+                    st.error("Fel lösenord")
+            else:
+                st.error("Användarnamnet finns inte")
+        
+        st.markdown("---")
+        st.caption("Kontakta administratören om du har glömt ditt lösenord.")
+
+def get_user_credentials():
+    """Hämta användaruppgifter från secrets eller environment"""
+    # För Streamlit Cloud: Använd st.secrets
+    # För lokal utveckling: Använd environment variables
+    
+    try:
+        # Försök hämta från Streamlit secrets först
+        if hasattr(st, 'secrets') and 'users' in st.secrets:
+            return dict(st.secrets['users'])
+    except:
+        pass
+    
+    # Fallback till environment variables för lokal utveckling
+    users = {}
+    # Format: USER_admin=hashed_password
+    for key, value in os.environ.items():
+        if key.startswith("USER_"):
+            username = key.replace("USER_", "")
+            users[username] = value
+    
+    # Om inga användare finns, använd default (ENDAST FÖR UTVECKLING!)
+    if not users:
+        st.warning("⚠️ Använder default-lösenord. Konfigurera secrets för produktion!")
+        users = {
+            "admin": hash_password("changeme123")  # ÄNDRA DETTA!
+        }
+    
+    return users
+
+def logout():
+    """Logga ut användaren"""
+    st.session_state.authenticated = False
+    st.session_state.username = None
+    st.rerun()
+
+# ==========================================
 # 1. KONFIGURATION OCH SETUP
 # ==========================================
 st.set_page_config(
@@ -25,12 +111,26 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Kontrollera autentisering FÖRST
+if not check_authentication():
+    login_page()
+    st.stop()
+
 load_dotenv()
 
-# Sökvägar
-BASE_DIR = Path(r"C:\Users\Dator\Documents\Data_Science\11_Examensarbete\green_power_sweden")
-DB_DIR = BASE_DIR / "data" / "03_vector_db" / "green_power_sweden_db"
-RAW_DATA_DIR = BASE_DIR / "data" / "01_raw"
+# Detektera om vi kör lokalt eller i molnet
+IS_CLOUD = os.environ.get("STREAMLIT_RUNTIME_ENV") == "cloud" or not os.path.exists("C:\\Users")
+
+if IS_CLOUD:
+    # Molnkonfiguration - använd relativa paths
+    BASE_DIR = Path(".")
+    DB_DIR = BASE_DIR / "vector_db"
+    RAW_DATA_DIR = BASE_DIR / "pdfs"
+else:
+    # Lokal konfiguration
+    BASE_DIR = Path(r"C:\Users\Dator\Documents\Data_Science\11_Examensarbete\green_power_sweden")
+    DB_DIR = BASE_DIR / "data" / "03_vector_db" / "green_power_sweden_db"
+    RAW_DATA_DIR = BASE_DIR / "data" / "01_raw"
 
 # --- INITIERA SESSION STATE ---
 if "current_page" not in st.session_state:
@@ -47,11 +147,12 @@ if "application_draft" not in st.session_state:
     st.session_state.application_draft = ""
 if "application_inputs" not in st.session_state:
     st.session_state.application_inputs = {}
+if "pdf_cache" not in st.session_state:
+    st.session_state.pdf_cache = {}
 
-# --- CSS STYLING (Professionell & Stabil) ---
+# --- CSS STYLING ---
 st.markdown("""
 <style>
-    /* --- SIDEBAR KNAPPAR --- */
     section[data-testid="stSidebar"] button {
         width: 200px !important;
         background-color: #f8f9fa;
@@ -76,7 +177,6 @@ st.markdown("""
         border-left: 5px solid #2196F3;
     }
 
-    /* --- KÄLLKORT --- */
     .source-card {
         padding: 15px;
         background-color: #ffffff;
@@ -86,7 +186,6 @@ st.markdown("""
         border-left: 5px solid #2196F3;
     }
 
-    /* --- KNAPPAR --- */
     div.stButton > button {
         border-radius: 6px;
         font-weight: 500;
@@ -98,7 +197,6 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
    
-    /* --- NEDLADDNINGSKNAPP (Grön) --- */
     div[data-testid="stDownloadButton"] > button {
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
@@ -113,7 +211,6 @@ st.markdown("""
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
     }
 
-    /* --- ÖVRIGT --- */
     .stTextArea textarea { font-size: 16px !important; }
     h1 { font-size: 2.0rem; font-weight: 700; color: #2c3e50; margin-bottom: 0px; }
     h3 { font-size: 1.2rem; font-weight: 600; color: #555; margin-top: 0px; }
@@ -123,8 +220,19 @@ st.markdown("""
 # ==========================================
 # 2. LADDNING AV RESURSER
 # ==========================================
+
+def get_api_key():
+    """Hämta API-nyckel från secrets eller environment"""
+    try:
+        if hasattr(st, 'secrets') and 'GOOGLE_API_KEY' in st.secrets:
+            return st.secrets['GOOGLE_API_KEY']
+    except:
+        pass
+    return os.environ.get('GOOGLE_API_KEY')
+
 @st.cache_resource
 def load_resources():
+    """Ladda embeddings och LLM"""
     embedding_model = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-mpnet-base-v2",
         model_kwargs={'device': 'cpu'},
@@ -132,17 +240,29 @@ def load_resources():
     )
    
     if not DB_DIR.exists():
-        st.error(f"Kunde inte hitta databasen på: {DB_DIR}")
+        st.error(f"⚠️ Kunde inte hitta vektordatabasen på: {DB_DIR}")
+        if IS_CLOUD:
+            st.info("💡 Tips: Se till att vektordatabasen är uppladdad eller länkad korrekt.")
         return None, None
-        
-    vectordb = Chroma(
-        persist_directory=str(DB_DIR),
-        embedding_function=embedding_model
-    )
+    
+    try:
+        vectordb = Chroma(
+            persist_directory=str(DB_DIR),
+            embedding_function=embedding_model
+        )
+    except Exception as e:
+        st.error(f"Fel vid laddning av vektordatabas: {e}")
+        return None, None
    
+    api_key = get_api_key()
+    if not api_key:
+        st.error("⚠️ Google API-nyckel saknas. Konfigurera GOOGLE_API_KEY i secrets eller .env")
+        return vectordb, None
+    
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash",
-        temperature=0.3
+        temperature=0.3,
+        google_api_key=api_key
     )
    
     return vectordb, llm
@@ -150,12 +270,45 @@ def load_resources():
 vectordb, llm = load_resources()
 
 # ==========================================
-# 3. RAG FUNKTIONER
+# 3. PDF-HANTERING FÖR MOLNET
+# ==========================================
+
+def get_pdf_path(relative_path):
+    """Returnera korrekt PDF-sökväg beroende på miljö"""
+    if IS_CLOUD:
+        # I molnet: Försök hitta PDF i cache eller lokal temporär mapp
+        return None  # PDFs är inte tillgängliga i molnet (se alternativ nedan)
+    else:
+        # Lokalt: Använd den befintliga sökvägen
+        return RAW_DATA_DIR / relative_path
+
+def show_pdf_or_message(doc_path, page_num):
+    """Visa PDF om tillgänglig, annars visa hjälpsamt meddelande"""
+    if IS_CLOUD:
+        st.info(f"""
+        📄 **Dokumentvisning i molnversionen**
+        
+        **Dokument:** {doc_path.name if isinstance(doc_path, Path) else Path(doc_path).name}  
+        **Sida:** {page_num}
+        
+        I molnversionen av Solaris är PDF-visning begränsad på grund av lagringsbegränsningar.
+        
+        **Alternativ:**
+        - Kontakta administratören för att få tillgång till originaldokumentet
+        - Dokumentets innehåll är redan analyserat och tillgängligt i chattens källor
+        """)
+    else:
+        if doc_path.exists():
+            pdf_viewer(str(doc_path), height=800, width="100%")
+        else:
+            st.error(f"❌ Fil saknas: {doc_path}")
+
+# ==========================================
+# 4. RAG FUNKTIONER
 # ==========================================
 
 def format_docs_with_sources(docs):
     formatted_texts = []
-    # Indexet i listan (i+1) motsvarar det DOKUMENT ID [X] som LLM ser.
     for i, doc in enumerate(docs):
         path = doc.metadata.get("full_path", "Okänd fil")
         page = doc.metadata.get("page", "?")
@@ -164,6 +317,9 @@ def format_docs_with_sources(docs):
     return "\n\n".join(formatted_texts)
 
 def get_rag_response(question, system_prompt, k=10):
+    if not vectordb or not llm:
+        return "⚠️ Systemet är inte korrekt konfigurerat. Kontakta administratören.", []
+    
     retriever = vectordb.as_retriever(search_kwargs={"k": k})
     docs = retriever.invoke(question)
     context_text = format_docs_with_sources(docs)
@@ -194,24 +350,19 @@ def get_rag_response(question, system_prompt, k=10):
     answer = chain.invoke({"context": context_text, "question": question})
     return answer, docs
 
-# --- Funktionen remap_citations har tagits bort i den här versionen. ---
-
 # ==========================================
-# 4. SIDA: CHATT (Research)
+# 5. SIDA: CHATT
 # ==========================================
 def show_chat_page():
-   
     st.markdown("# Välkommen till chatbotten Solaris ☀️🔋")
     st.markdown("### Din AI-assistent för tillståndsprocesser och solcellsparker.")
     st.divider()
 
     col_chat, col_ref = st.columns([1, 1], gap="large")
 
-    # --- VÄNSTER: CHATT ---
     with col_chat:
         st.header("💬 Chatt")
         
-        # Container för chatthistorik
         chat_container = st.container()
         
         with chat_container:
@@ -219,45 +370,30 @@ def show_chat_page():
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
 
-        # Inputfältet
         if prompt := st.chat_input("Ex: Hur motiverar man byggnation på jordbruksmark?"):
-            # 1. Visa användarens fråga DIREKT i containern (förhindrar hopp)
             st.session_state.messages.append({"role": "user", "content": prompt})
             with chat_container:
                 with st.chat_message("user"):
                     st.markdown(prompt)
             
-            # 2. Generera svar med spinner (också inuti containern/chatflowet)
             with chat_container:
                 with st.chat_message("assistant"):
                     with st.spinner("Söker och analyserar..."):
-                        
-                        # --- NY & FÖRENKLAD KÄLLHANTERING ---
                         sys_prompt = "Du är Solaris Legal. Svara professionellt på svenska och använd sakliga termer."
-                        # Få svaret (response) och ALLA 10 hämtade dokument (docs)
                         response, docs = get_rag_response(prompt, sys_prompt, k=10)
-                        
-                        # Skriv ut det ursprungliga svaret (som nu innehåller ID 1-10)
                         st.markdown(response)
 
-            # 4. State-uppdatering
-            
-            # Hantera negativt svar (tömmer källor om LLM nekar)
             NEGATIVE_PHRASE = "Jag har granskat de tillhandahållna dokumenten"
             if response.strip().startswith(NEGATIVE_PHRASE):
                 final_sources = []
             else:
-                final_sources = docs # Spara ALLA 10 hämtade dokument, oavsett citering
+                final_sources = docs
             
-            # Spara det RÅA svaret i historiken
             st.session_state.messages.append({"role": "assistant", "content": response})
             st.session_state.current_sources = final_sources
             st.session_state.selected_pdf = None
-            
-            # 5. Rerun för att uppdatera högerspalten
             st.rerun()
             
-        # Rensa-knapp
         st.write("")
         if st.session_state.messages:
             if st.button("🗑️ Rensa historik", type="secondary", use_container_width=True):
@@ -266,44 +402,33 @@ def show_chat_page():
                 st.session_state.selected_pdf = None
                 st.rerun()
 
-    # --- HÖGER: DOKUMENT ---
     with col_ref:
         st.header("📄 Källor & Dokument")
         
-        # Scenario A: Visa PDF
         if st.session_state.selected_pdf:
             doc_path = st.session_state.selected_pdf
-            page = st.session_state.selected_page # <-- page är sidnumret
+            page = st.session_state.selected_page
             
             if st.button("⬅️ Tillbaka till listan"):
                 st.session_state.selected_pdf = None
                 st.session_state.selected_page = 1
                 st.rerun()
             
-            st.markdown(f"**Visar:** `{doc_path.name}` (Sida {page})")
-            
-            if doc_path.exists():
-                pdf_viewer(str(doc_path), height=800, width="100%")
-            else:
-                st.error(f"Fil saknas: {doc_path}")
+            st.markdown(f"**Visar:** `{doc_path.name if isinstance(doc_path, Path) else Path(doc_path).name}` (Sida {page})")
+            show_pdf_or_message(doc_path, page)
 
-        # Scenario B: Visa Lista
         elif st.session_state.current_sources:
-            
-            # NY FÖRKLARING
             st.info(f"Listan visar de **{len(st.session_state.current_sources)}** mest relevanta dokumenten som analyserades i sökningen. Källhänvisningarna i chatten (t.ex. **[Källa: 7]**) refererar till dokumentets nummer i denna lista.")
             
             sources_container = st.container(border=False)
             
             with sources_container:
-                # Loopar över ALLA dokument, där i+1 är det ursprungliga DOKUMENT ID:t
                 for i, doc in enumerate(st.session_state.current_sources):
                     citation_id = i + 1
                     path_str = doc.metadata.get("full_path")
                     page_num = doc.metadata.get("page")
-                    full_os_path = RAW_DATA_DIR / path_str
+                    full_os_path = get_pdf_path(path_str) if not IS_CLOUD else Path(path_str)
                     
-                    # Källkortet
                     with st.container():
                         st.markdown(f"""
                         <div class="source-card">
@@ -312,12 +437,10 @@ def show_chat_page():
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Knappar för interaktion
                         c_open, c_path, c_text = st.columns([1, 1, 1])
                         
                         with c_open:
-                            # Öppna PDF till den citerade sidan
-                            if st.button(f"📄 Öppna PDF (Sid {page_num})", key=f"open_{i}"):
+                            if st.button(f"📄 Visa källa", key=f"open_{i}"):
                                 st.session_state.selected_pdf = full_os_path
                                 st.session_state.selected_page = page_num
                                 st.rerun()
@@ -330,12 +453,12 @@ def show_chat_page():
                             with st.popover("📝 Läs avsnitt"):
                                 st.caption(doc.page_content)
 
-                        st.markdown("") # Separation
+                        st.markdown("")
         else:
             st.info("Källor visas här när du ställer en fråga.")
 
 # ==========================================
-# 5. SIDA: SKAPA ANSÖKAN (Generator)
+# 6. SIDA: SKAPA ANSÖKAN
 # ==========================================
 def show_application_page():
     st.title("📝 Skapa Ansökan")
@@ -380,26 +503,21 @@ def show_application_page():
         st.divider()
         st.subheader(f"Utkast: {project_name}")
         
-        # --- DEL 1 ---
         with st.status("🔍 Del 1/2: Analyserar markval...", expanded=True):
             query_loc = f"Argument för att bygga solceller på {marktyp} i {kommun}. Hur motiverar man intrång på jordbruksmark för ett projekt på {size}?"
             sys_prompt = "Du ska skriva avsnittet 'Lokalisering' och vara saklig. Använd fetstil för källhänvisning [Källa: X]."
             
-            # NOTE: Vi använder get_rag_response, men remapping görs EJ här.
             text_loc, docs_loc = get_rag_response(query_loc, sys_prompt)
             st.write("Klar.")
             
-            # Använder den enklare referenslistan här, utan remapping
             full_draft_text += f"\n## 1. LOKALISERING & MARKVAL\n{text_loc}\n\n**Referenser för Lokalisering och markval (Ursprungliga ID:n):**\n"
             for i, d in enumerate(docs_loc):
                 full_draft_text += f"- [{i+1}] {d.metadata.get('full_path')} (Sid {d.metadata.get('page')})\n"
         
-        # --- DEL 2 ---
         with st.status("🌱 Del 2/2: Tar fram skyddsåtgärder...", expanded=True):
             query_env = f"Vilka skyddsåtgärder krävs för {naturvarden} vid anläggning av en solcellspark? Beskriv även miljöpåverkan."
             sys_prompt = "Du ska skriva avsnittet 'Miljöpåverkan och skyddsåtgärder'. Använd fetstil för källhänvisning [Källa: X]."
             
-            # NOTE: Vi använder get_rag_response, men remapping görs EJ här.
             text_env, docs_env = get_rag_response(query_env, sys_prompt)
             st.write("Klar.")
 
@@ -431,20 +549,22 @@ def show_application_page():
                 st.rerun()
 
 # ==========================================
-# 6. NAVIGATION & MENY
+# 7. NAVIGATION & MENY
 # ==========================================
 def main():
-    # --- HÄR ÄR DIN ÅTERINFÖRDA KOD FÖR LOGGAN ---
-    # Logga i sidopanelen
     LOGO_PATH = BASE_DIR / "assets" / "gps-logo.svg"
 
     with st.sidebar:
         if LOGO_PATH.exists():
-            st.image(str(LOGO_PATH), use_container_width=True) # Visar loggan
+            st.image(str(LOGO_PATH), use_container_width=True)
         else:
-            st.header("Chatboten Solaris") # Fallback-titel om loggan inte hittas
+            st.header("Chatboten Solaris")
         
         st.divider()
+        
+        # Visa inloggad användare
+        if st.session_state.get("username"):
+            st.caption(f"👤 Inloggad som: **{st.session_state.username}**")
         
         if st.button("🔎  Sök & Analys", type="primary" if st.session_state.current_page == "Sök & Analys" else "secondary"):
             st.session_state.current_page = "Sök & Analys"
@@ -453,6 +573,11 @@ def main():
         if st.button("📝  Skapa Ansökan", type="primary" if st.session_state.current_page == "Skapa Ansökan" else "secondary"):
             st.session_state.current_page = "Skapa Ansökan"
             st.rerun()
+        
+        st.divider()
+        
+        if st.button("🚪 Logga ut", type="secondary"):
+            logout()
 
     if st.session_state.current_page == "Sök & Analys":
         show_chat_page()

@@ -1,24 +1,205 @@
+# ======================================================================
+# SOLARIS - .gitignore
+# ======================================================================
+# Denna fil skyddar känslig data och håller repository:t lätt
+# ======================================================================
+
 # ----------------------------------------------------------------------
-# Exkludera stora data-mappar och virtuella miljöer
+# 🔐 SECRETS & API-NYCKLAR (VIKTIGT!)
 # ----------------------------------------------------------------------
-
-# Exkludera all rådata. Detta löser det akuta filnamnsproblemet OCH storleksbegränsningen.
-# Git ignorerar nu alla filer i denna mapp.
-data
-
-# Exkludera den virtuella miljön. Den är stor och onödig att ladda upp.
-.venv/
-__pycache__/
-
-# Exkludera filen med API-nycklar
+.streamlit/secrets.toml
 .env
+.env.local
+*.env
 
 # ----------------------------------------------------------------------
-# Inkludera de bearbetade filerna du VILL HA
+# 💾 DATA & DATABASER (För stora för Git)
 # ----------------------------------------------------------------------
 
-# UNDANTAG (NEGERING): Inkludera de bearbetade filerna du vill ha.
-# Vi måste först göra ett undantag för mappen 02_processed
-# och sedan ett undantag för filen, då 'data/' ignoreras rekursivt.
+# Ignorera HELA data-mappen (rådata, PDFs, databaser)
+data/
+
+# UNDANTAG: Inkludera bearbetade filer som är små nog
 !data/02_processed/
-!data/02_processed/pdf_analysis_report.csv
+!data/02_processed/*.csv
+!data/02_processed/*.json
+
+# Vektordatabas (2GB+) - laddar ner från Google Drive istället
+vector_db/
+*.db
+*.sqlite
+*.chroma
+
+# Rådata och PDFs (16GB+)
+*.pdf
+
+# Komprimerade filer
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# ----------------------------------------------------------------------
+# 🐍 PYTHON
+# ----------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.pytest_cache/
+
+# ----------------------------------------------------------------------
+# 🌐 VIRTUELLA MILJÖER
+# ----------------------------------------------------------------------
+.venv/
+venv/
+ENV/
+env/
+.virtualenv/
+
+# ----------------------------------------------------------------------
+# 📓 JUPYTER NOTEBOOK
+# ----------------------------------------------------------------------
+# Notebooks inkluderas i Git, men inte checkpoints
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+profile_default/
+ipython_config.py
+
+# Notebooks läggs till i Git (inget *.ipynb här)
+
+# ----------------------------------------------------------------------
+# 💻 IDE & EDITORS
+# ----------------------------------------------------------------------
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vi/Vim
+*.swp
+*.swo
+*~
+.*.swp
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ----------------------------------------------------------------------
+# 🖥️ OS-SPECIFIKA FILER
+# ----------------------------------------------------------------------
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ----------------------------------------------------------------------
+# 📊 LOGS & TEMPORÄRA FILER
+# ----------------------------------------------------------------------
+*.log
+logs/
+*.tmp
+tmp/
+temp/
+*.temp
+
+# ----------------------------------------------------------------------
+# 🔧 STREAMLIT-SPECIFIKT
+# ----------------------------------------------------------------------
+
+# Streamlit cache
+.streamlit/*
+!.streamlit/config.toml
+
+# Streamlit credentials (redan inkluderat ovan men viktigt att repetera)
+.streamlit/secrets.toml
+
+# ----------------------------------------------------------------------
+# 📦 NODE_MODULES (om du använder JavaScript/npm)
+# ----------------------------------------------------------------------
+node_modules/
+package-lock.json
+
+# ----------------------------------------------------------------------
+# 🎨 ASSETS (valfritt - beroende på storlek)
+# ----------------------------------------------------------------------
+# Kommentera bort om dina assets är små och ska inkluderas
+# assets/videos/
+# assets/large_images/
+
+# ----------------------------------------------------------------------
+# 🗄️ BACKUP & ARKIV
+# ----------------------------------------------------------------------
+*.bak
+*.backup
+*.old
+*_backup
+*_old
+
+# ----------------------------------------------------------------------
+# MISC
+# ----------------------------------------------------------------------
+.sass-cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+cython_debug/
