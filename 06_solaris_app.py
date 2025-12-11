@@ -8,6 +8,9 @@ import io
 import zipfile
 import tempfile
 
+# Importera nedladdningsfunktionen
+from download_vectordb import download_and_extract_vectordb
+
 # LangChain & Chroma
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -230,20 +233,49 @@ def get_api_key():
         pass
     return os.environ.get('GOOGLE_API_KEY')
 
+# Hämta Hugging Face Token
+def get_hf_token():
+    """Hämta Hugging Face API-nyckel från secrets eller environment"""
+    try:
+        if hasattr(st, 'secrets') and 'HF_TOKEN' in st.secrets:
+            return st.secrets['HF_TOKEN']
+    except:
+        pass
+    return os.environ.get('HF_TOKEN') # Fallback till environment variable
+
 @st.cache_resource
 def load_resources():
     """Ladda embeddings och LLM"""
+
+    # Hämta Hugging Face-token
+    hf_token = get_hf_token()
+    if not hf_token:
+        st.warning("⚠️ HF_TOKEN saknas. Kan få Rate Limit-fel vid inläsning av embedding-modell.")
+    
+    # Använd token i HuggingFaceEmbeddings
+    # Token hanteras internt av Hugging Face-biblioteken när den är tillgänglig i miljön.
     embedding_model = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-mpnet-base-v2",
         model_kwargs={'device': 'cpu'},
         encode_kwargs={'normalize_embeddings': False}
+        # token=hf_token  <-- Du behöver inte ange detta om du satt HF_TOKEN som env/secret!
     )
    
     if not DB_DIR.exists():
-        st.error(f"⚠️ Kunde inte hitta vektordatabasen på: {DB_DIR}")
-        if IS_CLOUD:
-            st.info("💡 Tips: Se till att vektordatabasen är uppladdad eller länkad korrekt.")
-        return None, None
+            if IS_CLOUD:
+                with st.spinner("📥 Laddar ner och packar upp vektordatabasen... (Detta sker bara en gång)"):
+                    # Anropa funktionen från din andra fil
+                    success = download_and_extract_vectordb()
+                    
+                    if not success:
+                        st.error("❌ Misslyckades att ladda ner databasen från Google Drive.")
+                        return None, None
+                    else:
+                        st.success("✅ Databas laddad!")
+            else:
+                # Om vi är lokalt och den saknas
+                st.error(f"⚠️ Kunde inte hitta vektordatabasen på: {DB_DIR}")
+                return None, None
     
     try:
         vectordb = Chroma(
@@ -260,7 +292,7 @@ def load_resources():
         return vectordb, None
     
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-exp",
+        model="gemini-2.5",
         temperature=0.3,
         google_api_key=api_key
     )
