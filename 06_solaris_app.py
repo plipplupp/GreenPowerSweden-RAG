@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import io
 import zipfile
 import tempfile
+import time
 
 # Importera nedladdningsfunktionen
 from download_vectordb import download_and_extract_vectordb
@@ -545,6 +546,9 @@ def show_application_page():
             full_draft_text += f"\n## 1. LOKALISERING & MARKVAL\n{text_loc}\n\n**Referenser för Lokalisering och markval (Ursprungliga ID:n):**\n"
             for i, d in enumerate(docs_loc):
                 full_draft_text += f"- [{i+1}] {d.metadata.get('full_path')} (Sid {d.metadata.get('page')})\n"
+            
+            # Lägg till en paus på 2 sekunder mellan de två anropen
+            time.sleep(2)
         
         with st.status("🌱 Del 2/2: Tar fram skyddsåtgärder...", expanded=True):
             query_env = f"Vilka skyddsåtgärder krävs för {naturvarden} vid anläggning av en solcellspark? Beskriv även miljöpåverkan."
