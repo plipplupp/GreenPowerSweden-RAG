@@ -26,6 +26,7 @@ data/
 
 # Vektordatabas (2GB+) - laddar ner från Google Drive istället
 vector_db/
+vector_db_bgem3/
 *.db
 *.sqlite
 *.chroma

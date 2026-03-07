@@ -12,6 +12,10 @@ import time
 # Importera nedladdningsfunktionen
 from download_vectordb import download_and_extract_vectordb
 
+# Projektets sökvägar
+from src.utils.paths import PROJECT_ROOT, VECTOR_DB_DIR, RAW_DATA_DIR
+import torch
+
 # LangChain & Chroma
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -42,7 +46,7 @@ def check_authentication():
 
 def login_page():
     """Visa inloggningssida"""
-    st.markdown("# 🔐 Logga in till Solaris")
+    st.markdown("# 🔐 Logga in till Solveig")
     st.markdown("### Din AI-assistent för tillståndsprocesser och solcellsparker")
     
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -84,18 +88,18 @@ def get_user_credentials():
     
     # Fallback till environment variables för lokal utveckling
     users = {}
-    # Format: USER_admin=hashed_password
+    # Format: USER_CRED_admin=hashed_password
+    # (Bytte prefix till USER_CRED_ för att undvika krock med systemvariabler som USER_ZDOTDIR)
     for key, value in os.environ.items():
-        if key.startswith("USER_"):
-            username = key.replace("USER_", "")
+        if key.startswith("USER_CRED_"):
+            username = key.replace("USER_CRED_", "")
             users[username] = value
     
-    # Om inga användare finns, använd default (ENDAST FÖR UTVECKLING!)
-    if not users:
-        st.warning("⚠️ Använder default-lösenord. Konfigurera secrets för produktion!")
-        users = {
-            "admin": hash_password("changeme123")  # ÄNDRA DETTA!
-        }
+    # Om inga användare definierats (eller om vi kör lokalt), se till att admin finns
+    if "admin" not in users:
+        st.warning("⚠️ Använder default-lösenord för 'admin'. Konfigurera secrets/env för produktion!")
+        # Om vi vill ha admin som fallback:
+        users["admin"] = hash_password("changeme123")
     
     return users
 
@@ -109,7 +113,7 @@ def logout():
 # 1. KONFIGURATION OCH SETUP
 # ==========================================
 st.set_page_config(
-    page_title="Solaris",
+    page_title="Solveig",
     page_icon="☀️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -123,18 +127,18 @@ if not check_authentication():
 load_dotenv()
 
 # Detektera om vi kör lokalt eller i molnet
-IS_CLOUD = os.environ.get("STREAMLIT_RUNTIME_ENV") == "cloud" or not os.path.exists("C:\\Users")
+IS_CLOUD = os.environ.get("STREAMLIT_RUNTIME_ENV") == "cloud"
 
 if IS_CLOUD:
-    # Molnkonfiguration - använd relativa paths
+    # Molnkonfiguration - använd relativa paths (för Streamlit Cloud)
     BASE_DIR = Path(".")
     DB_DIR = BASE_DIR / "vector_db"
     RAW_DATA_DIR = BASE_DIR / "pdfs"
 else:
-    # Lokal konfiguration
-    BASE_DIR = Path(r"C:\Users\Dator\Documents\Data_Science\11_Examensarbete\green_power_sweden")
-    DB_DIR = BASE_DIR / "data" / "03_vector_db" / "green_power_sweden_db"
-    RAW_DATA_DIR = BASE_DIR / "data" / "01_raw"
+    # Lokal konfiguration - använd centraliserade sökvägar från src.utils.paths
+    BASE_DIR = PROJECT_ROOT
+    DB_DIR = VECTOR_DB_DIR
+    RAW_DATA_DIR = RAW_DATA_DIR  # Redan importerad från src.utils.paths
 
 # --- INITIERA SESSION STATE ---
 if "current_page" not in st.session_state:
@@ -153,6 +157,8 @@ if "application_inputs" not in st.session_state:
     st.session_state.application_inputs = {}
 if "pdf_cache" not in st.session_state:
     st.session_state.pdf_cache = {}
+if "focus_mode" not in st.session_state:
+    st.session_state.focus_mode = False
 
 # --- CSS STYLING ---
 st.markdown("""
@@ -218,6 +224,16 @@ st.markdown("""
     .stTextArea textarea { font-size: 16px !important; }
     h1 { font-size: 2.0rem; font-weight: 700; color: #2c3e50; margin-bottom: 0px; }
     h3 { font-size: 1.2rem; font-weight: 600; color: #555; margin-top: 0px; }
+    
+    /* Centrera PDF-visaren */
+    [data-testid="stHorizontalBlock"] > div {
+        display: flex;
+        justify-content: center;
+    }
+    .st-emotion-cache-12fm70x {
+        display: flex;
+        justify-content: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -248,18 +264,19 @@ def get_hf_token():
 def load_resources():
     """Ladda embeddings och LLM"""
 
-    # Hämta Hugging Face-token
-    hf_token = get_hf_token()
-    if not hf_token:
-        st.warning("⚠️ HF_TOKEN saknas. Kan få Rate Limit-fel vid inläsning av embedding-modell.")
-    
-    # Använd token i HuggingFaceEmbeddings
-    # Token hanteras internt av Hugging Face-biblioteken när den är tillgänglig i miljön.
+    # Detektera enhet (GPU/MPS/CPU)
+    if torch.backends.mps.is_available():
+        device = "mps"
+    elif torch.cuda.is_available():
+        device = "cuda"
+    else:
+        device = "cpu"
+        
+    # Använd BGE-M3
     embedding_model = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-mpnet-base-v2",
-        model_kwargs={'device': 'cpu'},
+        model_name="BAAI/bge-m3",
+        model_kwargs={'device': device},
         encode_kwargs={'normalize_embeddings': False}
-        # token=hf_token  <-- Du behöver inte ange detta om du satt HF_TOKEN som env/secret!
     )
    
     if not DB_DIR.exists():
@@ -324,7 +341,7 @@ def show_pdf_or_message(doc_path, page_num):
         **Dokument:** {doc_path.name if isinstance(doc_path, Path) else Path(doc_path).name}  
         **Sida:** {page_num}
         
-        I molnversionen av Solaris är PDF-visning begränsad på grund av lagringsbegränsningar.
+        I molnversionen av Solveig är PDF-visning begränsad på grund av lagringsbegränsningar.
         
         **Alternativ:**
         - Kontakta administratören för att få tillgång till originaldokumentet
@@ -332,7 +349,14 @@ def show_pdf_or_message(doc_path, page_num):
         """)
     else:
         if doc_path.exists():
-            pdf_viewer(str(doc_path), height=800, width="100%")
+            # Om vi är i fokusläge (100% bredd), använd en centrerad kolumn för att PDF:en inte ska "klistra" åt vänster
+            if st.session_state.get("focus_mode", False):
+                _, cent_co, _ = st.columns([1, 8, 1])
+                with cent_co:
+                    pdf_viewer(str(doc_path), height=800, width="100%")
+            else:
+                # I normalt läge är kolumnen redan smal (40%), så använd hela bredden
+                pdf_viewer(str(doc_path), height=800, width="100%")
         else:
             st.error(f"❌ Fil saknas: {doc_path}")
 
@@ -387,108 +411,126 @@ def get_rag_response(question, system_prompt, k=10):
 # 5. SIDA: CHATT
 # ==========================================
 def show_chat_page():
-    st.markdown("# Välkommen till chatbotten Solaris ☀️🔋")
+    st.markdown("# Välkommen till chatbotten Solveig ☀️🔋")
     st.markdown("### Din AI-assistent för tillståndsprocesser och solcellsparker.")
     st.divider()
 
-    col_chat, col_ref = st.columns([1, 1], gap="large")
+    # Logik för dynamisk layout
+    if st.session_state.focus_mode:
+        # I fokusläge visar vi BARA referenskolumnen (ingen st.columns behövs)
+        show_references_section()
+    else:
+        # Normalt läge: 60/40 split
+        col_chat, col_ref = st.columns([6, 4], gap="large")
 
-    with col_chat:
-        st.header("💬 Chatt")
-        
-        chat_container = st.container()
-        
-        with chat_container:
-            for message in st.session_state.messages:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
-
-        if prompt := st.chat_input("Ex: Hur motiverar man byggnation på jordbruksmark?"):
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with chat_container:
-                with st.chat_message("user"):
-                    st.markdown(prompt)
+        with col_chat:
+            st.header("💬 Chatt")
+            
+            chat_container = st.container()
             
             with chat_container:
-                with st.chat_message("assistant"):
-                    with st.spinner("Söker och analyserar..."):
-                        sys_prompt = "Du är Solaris Legal. Svara professionellt på svenska och använd sakliga termer."
-                        response, docs = get_rag_response(prompt, sys_prompt, k=10)
-                        st.markdown(response)
+                for message in st.session_state.messages:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["content"])
 
-            NEGATIVE_PHRASE = "Jag har granskat de tillhandahållna dokumenten"
-            if response.strip().startswith(NEGATIVE_PHRASE):
-                final_sources = []
-            else:
-                final_sources = docs
-            
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.session_state.current_sources = final_sources
+            if prompt := st.chat_input("Ex: Hur motiverar man byggnation på jordbruksmark?"):
+                st.session_state.messages.append({"role": "user", "content": prompt})
+                with chat_container:
+                    with st.chat_message("user"):
+                        st.markdown(prompt)
+                
+                with chat_container:
+                    with st.chat_message("assistant"):
+                        with st.spinner("Söker och analyserar..."):
+                            sys_prompt = "Du är Solveig Legal. Svara professionellt på svenska och använd sakliga termer."
+                            response, docs = get_rag_response(prompt, sys_prompt, k=10)
+                            st.markdown(response)
+
+                NEGATIVE_PHRASE = "Jag har granskat de tillhandahållna dokumenten"
+                if response.strip().startswith(NEGATIVE_PHRASE):
+                    final_sources = []
+                else:
+                    final_sources = docs
+                
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                st.session_state.current_sources = final_sources
+                st.session_state.selected_pdf = None
+                st.rerun()
+                
+            st.write("")
+            if st.session_state.messages:
+                if st.button("🗑️ Rensa historik", type="secondary", width="stretch"):
+                    st.session_state.messages = []
+                    st.session_state.current_sources = []
+                    st.session_state.selected_pdf = None
+                    st.rerun()
+
+        with col_ref:
+            show_references_section()
+
+def show_references_section():
+    """Hjälpfunktion för att visa referenssektionen (används i både normalt och fokusläge)"""
+    st.header("📄 Källor & Dokument")
+    
+    # Knapp för att växla fokusvy
+    focus_label = "🏥 Lämna fokusvy (visa chatt)" if st.session_state.focus_mode else "🔍 Fokusvy (maximera dokument)"
+    if st.button(focus_label, type="secondary", use_container_width=True):
+        st.session_state.focus_mode = not st.session_state.focus_mode
+        st.rerun()
+    
+    st.divider()
+    
+    if st.session_state.selected_pdf:
+        doc_path = st.session_state.selected_pdf
+        page = st.session_state.selected_page
+        
+        if st.button("⬅️ Tillbaka till listan"):
             st.session_state.selected_pdf = None
+            st.session_state.selected_page = 1
             st.rerun()
-            
-        st.write("")
-        if st.session_state.messages:
-            if st.button("🗑️ Rensa historik", type="secondary", width="stretch"):
-                st.session_state.messages = []
-                st.session_state.current_sources = []
-                st.session_state.selected_pdf = None
-                st.rerun()
-
-    with col_ref:
-        st.header("📄 Källor & Dokument")
         
-        if st.session_state.selected_pdf:
-            doc_path = st.session_state.selected_pdf
-            page = st.session_state.selected_page
-            
-            if st.button("⬅️ Tillbaka till listan"):
-                st.session_state.selected_pdf = None
-                st.session_state.selected_page = 1
-                st.rerun()
-            
-            st.markdown(f"**Visar:** `{doc_path.name if isinstance(doc_path, Path) else Path(doc_path).name}` (Sida {page})")
-            show_pdf_or_message(doc_path, page)
+        st.markdown(f"**Visar:** `{doc_path.name if isinstance(doc_path, Path) else Path(doc_path).name}` (Sida {page})")
+        show_pdf_or_message(doc_path, page)
 
-        elif st.session_state.current_sources:
-            st.info(f"Listan visar de **{len(st.session_state.current_sources)}** mest relevanta dokumenten som analyserades i sökningen. Källhänvisningarna i chatten (t.ex. **[Källa: 7]**) refererar till dokumentets nummer i denna lista.")
-            
-            sources_container = st.container(border=False)
-            
-            with sources_container:
-                for i, doc in enumerate(st.session_state.current_sources):
-                    citation_id = i + 1
-                    path_str = doc.metadata.get("full_path")
-                    page_num = doc.metadata.get("page")
-                    full_os_path = get_pdf_path(path_str) if not IS_CLOUD else Path(path_str)
+    elif st.session_state.current_sources:
+        st.info(f"Listan visar de **{len(st.session_state.current_sources)}** mest relevanta dokumenten som analyserades i sökningen. Källhänvisningarna i chatten (t.ex. **[Källa: 7]**) refererar till dokumentets nummer i denna lista.")
+        
+        sources_container = st.container(border=False)
+        
+        with sources_container:
+            for i, doc in enumerate(st.session_state.current_sources):
+                citation_id = i + 1
+                path_str = doc.metadata.get("full_path")
+                page_num = doc.metadata.get("page")
+                full_os_path = get_pdf_path(path_str) if not IS_CLOUD else Path(path_str)
+                
+                with st.container():
+                    st.markdown(f"""
+                    <div class="source-card">
+                        <b>[Källa {citation_id}] {Path(path_str).name}</b><br>
+                        <span style="color:#555; font-size:0.9em;">Sida {page_num}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
                     
-                    with st.container():
-                        st.markdown(f"""
-                        <div class="source-card">
-                            <b>[Källa {citation_id}] {Path(path_str).name}</b><br>
-                            <span style="color:#555; font-size:0.9em;">Sida {page_num}</span>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        c_open, c_path, c_text = st.columns([1, 1, 1])
-                        
-                        with c_open:
-                            if st.button(f"📄 Visa källa", key=f"open_{i}"):
-                                st.session_state.selected_pdf = full_os_path
-                                st.session_state.selected_page = page_num
-                                st.rerun()
-                        
-                        with c_path:
-                            with st.popover("📂 Visa sökväg"):
-                                st.code(path_str, language="text")
-                                
-                        with c_text:
-                            with st.popover("📝 Läs avsnitt"):
-                                st.caption(doc.page_content)
+                    c_open, c_path, c_text = st.columns([1, 1, 1])
+                    
+                    with c_open:
+                        if st.button(f"📄 Visa källa", key=f"open_{i}"):
+                            st.session_state.selected_pdf = full_os_path
+                            st.session_state.selected_page = page_num
+                            st.rerun()
+                    
+                    with c_path:
+                        with st.popover("📂 Visa sökväg"):
+                            st.code(path_str, language="text")
+                            
+                    with c_text:
+                        with st.popover("📝 Läs avsnitt"):
+                            st.caption(doc.page_content)
 
-                        st.markdown("")
-        else:
-            st.info("Källor visas här när du ställer en fråga.")
+                    st.markdown("")
+    else:
+        st.info("Källor visas här när du ställer en fråga.")
 
 # ==========================================
 # 6. SIDA: SKAPA ANSÖKAN
@@ -594,7 +636,7 @@ def main():
         if LOGO_PATH.exists():
             st.image(str(LOGO_PATH), use_container_width=True)
         else:
-            st.header("Chatboten Solaris")
+            st.header("Chatboten Solveig")
         
         st.divider()
         
