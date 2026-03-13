@@ -128,20 +128,44 @@ def get_user_credentials():
             try:
                 import json
                 users_data = json.loads(u_dict_env)
-                for uname, pw_hash in users_data.items():
-                    users[uname.lower().strip()] = pw_hash
+                # Spara roller i session state för senare bruk (eftersom USERS_FILE saknas i molnet)
+                if "user_roles" not in st.session_state:
+                    st.session_state.user_roles = {}
+                
+                for uname, data in users_data.items():
+                    u_lower = uname.lower().strip()
+                    if isinstance(data, dict):
+                        users[u_lower] = data.get("password_hash")
+                        st.session_state.user_roles[u_lower] = data.get("role", "user")
+                    else:
+                        users[u_lower] = data
+                        # Om det bara är en hash, gissa roll (admin/maddovdv är admin)
+                        role = "admin" if u_lower in ["admin", "maddovdv"] else "user"
+                        st.session_state.user_roles[u_lower] = role
             except Exception as e:
-                # Logga fel till konsolen tyst
-                print(f"DEBUG: Kunde inte parsa USERS_DICT från env: {e}")
+                print(f"DEBUG: Kunde inte parsa USERS_DICT: {e}")
                 pass
     
     # 4. Om inga användare definierats alls, visa varning
     if not users:
         st.warning("⚠️ Inga användare konfigurerade. Kontrollera dina Secrets på Hugging Face.")
-        # Skapa en tillfällig admin om allt annat fallerar så man kan felsöka
         users["admin"] = hash_password_sha256("solveig2024")
     
     return users
+
+def is_admin_cloud(username):
+    """Special-version av is_admin för molnet som kollar session_state"""
+    if not IS_CLOUD:
+        from src.utils.user_management import is_admin
+        return is_admin(username)
+    
+    # I molnet litar vi på de roller vi laddade in i login-steget
+    if "user_roles" in st.session_state:
+        return st.session_state.user_roles.get(username.lower(), "user") == "admin"
+    
+    # Fallback om något gått snett
+    return username.lower() in ["admin", "maddovdv"]
+
 
 def logout():
     """Logga ut användaren"""
@@ -177,7 +201,7 @@ from download_vectordb import download_and_extract_vectordb
 load_dotenv()
 
 # Detektera om vi kör lokalt eller i molnet
-IS_CLOUD = os.environ.get("STREAMLIT_RUNTIME_ENV") == "cloud"
+IS_CLOUD = os.environ.get("STREAMLIT_RUNTIME_ENV") == "cloud" or "SPACE_ID" in os.environ
 
 if IS_CLOUD:
     # Molnkonfiguration - använd relativa paths (för Streamlit Cloud)
@@ -1056,7 +1080,7 @@ def main():
             st.rerun()
         
         # Admin-knapp – syns bara för admin-användare
-        if current_username and is_admin(current_username):
+        if current_username and is_admin_cloud(current_username):
             if st.button("🔧  Admin", type="primary" if st.session_state.current_page == "Admin" else "secondary"):
                 st.session_state.current_page = "Admin"
                 st.rerun()
@@ -1070,7 +1094,7 @@ def main():
         show_chat_page()
     elif st.session_state.current_page == "Skapa Ansökan":
         show_application_page()
-    elif st.session_state.current_page == "Admin" and current_username and is_admin(current_username):
+    elif st.session_state.current_page == "Admin" and current_username and is_admin_cloud(current_username):
         show_admin_page()
     else:
         show_chat_page()
