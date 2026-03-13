@@ -328,11 +328,14 @@ def get_api_key():
 def get_hf_token():
     """Hämta Hugging Face API-nyckel från secrets eller environment"""
     try:
-        if hasattr(st, 'secrets') and 'HF_TOKEN' in st.secrets:
-            return st.secrets['HF_TOKEN']
+        if hasattr(st, 'secrets'): 
+            if 'HF_TOKEN' in st.secrets:
+                return st.secrets['HF_TOKEN']
+            if 'HF_WRITE_TOKEN' in st.secrets:
+                return st.secrets['HF_WRITE_TOKEN']
     except:
         pass
-    return os.environ.get('HF_TOKEN') # Fallback till environment variable
+    return os.environ.get('HF_TOKEN') or os.environ.get('HF_WRITE_TOKEN')
 
 @st.cache_resource
 def load_resources():
@@ -410,6 +413,10 @@ def get_pdf_path(relative_path):
             token = get_hf_token()
             file_name = Path(relative_path).name
             
+            # Maskad token för debug
+            masked_token = f"{token[:6]}...{token[-3:]}" if token and len(token) > 10 else "MISSING"
+            # print(f"DEBUG PDF: Försöker hämta {file_name} från {repo_id} med token {masked_token}")
+            
             cached_path = hf_hub_download(
                 repo_id=repo_id, 
                 repo_type="dataset", 
@@ -418,6 +425,7 @@ def get_pdf_path(relative_path):
             )
             return Path(cached_path)
         except Exception as e:
+            st.error(f"❌ Fel vid hämtning av PDF ({Path(relative_path).name}): {e}")
             return None
     else:
         # Lokalt: Använd den befintliga sökvägen
