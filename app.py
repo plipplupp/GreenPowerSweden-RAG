@@ -360,7 +360,7 @@ def load_resources():
                     success = download_and_extract_vectordb()
                     
                     if not success:
-                        st.error("❌ Misslyckades att ladda ner databasen från Google Drive.")
+                        st.error("❌ Misslyckades att ladda ner databasen från Hugging Face. Kontrollera att ditt HF_TOKEN i Secrets har läsrättigheter till datasetet.")
                         return None, None
                     else:
                         st.success("✅ Databas laddad!")

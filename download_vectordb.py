@@ -8,13 +8,16 @@ from huggingface_hub import snapshot_download
 
 def get_hf_token():
     """Hämta HF_TOKEN från secrets eller environment"""
+    # 1. Kolla Streamlit secrets (förstahandsval i molnet)
     try:
         import streamlit as st
         if 'HF_TOKEN' in st.secrets:
             return st.secrets['HF_TOKEN']
     except:
         pass
-    return os.environ.get('HF_TOKEN')
+        
+    # 2. Kolla miljövariabler ( fallback, viktigt för vissa miljöer)
+    return os.environ.get('HF_TOKEN') or os.environ.get('HF_WRITE_TOKEN')
 
 def download_and_extract_vectordb():
     """
