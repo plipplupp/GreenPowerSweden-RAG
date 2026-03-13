@@ -43,10 +43,14 @@ def download_and_extract_vectordb(st_container=None):
     
     token = get_hf_token()
     if not token:
-        msg = "⚠️ HF_TOKEN saknas. Kan inte ladda ner privat dataset."
+        msg = "⚠️ HF_TOKEN hittades inte i secrets eller env. Kan inte ladda ner privat dataset."
         log(msg, "error")
         return False, msg
-
+    else:
+        # Säkerhetsmaskad loggning för att verifiera att vi har rätt token
+        masked_token = f"{token[:6]}...{token[-3:]}" if len(token) > 10 else "***"
+        log(f"🔑 Använder token: {masked_token}")
+    
     try:
         log(f"📥 Laddar ner vektordatabas från Hugging Face ({repo_id})...")
         
