@@ -7,10 +7,22 @@ def upload_db_to_hf():
     repo_id = "greenpowersweden/solveig-db"
     db_path = Path("/Users/gustav_jeansson/Documents/Data Science/GreenPowerSweden/vector_db_bgem3")
     
-    # Hämta token från miljövariabel eller prompt
+    # Försök hämta token från miljövariabler eller streamlit secrets
     token = os.environ.get("HF_TOKEN")
+    
     if not token:
-        print("HF_TOKEN saknas i miljövariabler.")
+        try:
+            import toml
+            secrets_path = Path("/Users/gustav_jeansson/Documents/Data Science/GreenPowerSweden/.streamlit/secrets.toml")
+            if secrets_path.exists():
+                secrets = toml.load(secrets_path)
+                # Prioritera en dedikerad WRITE-token om den finns
+                token = secrets.get("HF_WRITE_TOKEN") or secrets.get("HF_TOKEN")
+        except Exception:
+            pass
+            
+    if not token:
+        print("HF_TOKEN saknas i miljövariabler och secrets.toml.")
         token = input("Ange din Hugging Face Write Token: ").strip()
     
     api = HfApi()
