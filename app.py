@@ -94,13 +94,31 @@ def get_user_credentials():
     # 1. Primärkälla: users.json (delad modul)
     users = get_user_credentials_from_file()
     
-    # 2. Streamlit secrets (för Streamlit Cloud)
+    # 2. Streamlit secrets (för Streamlit Cloud / HF Spaces)
     if not users:
         try:
-            if hasattr(st, 'secrets') and 'users' in st.secrets:
-                for uname, pw_hash in dict(st.secrets['users']).items():
-                    users[uname.lower()] = pw_hash
-        except Exception:
+            if hasattr(st, 'secrets'):
+                # Kolla efter USERS_DICT (smidigaste sättet för många användare på HF)
+                if 'USERS_DICT' in st.secrets:
+                    try:
+                        import json
+                        # Kan vara antingen en sträng (från env) eller ett objekt (från secrets.toml)
+                        u_dict = st.secrets['USERS_DICT']
+                        if isinstance(u_dict, str):
+                            users_data = json.loads(u_dict)
+                        else:
+                            users_data = dict(u_dict)
+                        
+                        for uname, pw_hash in users_data.items():
+                            users[uname.lower().strip()] = pw_hash
+                    except Exception as e:
+                        st.error(f"Fel vid inläsning av USERS_DICT: {e}")
+                
+                # Fallback: Kolla efter [users]-sektionen (från lokala secrets.toml)
+                if 'users' in st.secrets:
+                    for uname, pw_hash in dict(st.secrets['users']).items():
+                        users[uname.lower().strip()] = pw_hash
+        except:
             pass
     
     # 3. Fallback: Environment variables
