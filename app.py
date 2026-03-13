@@ -422,7 +422,7 @@ def get_pdf_path(relative_path):
             )
             return Path(cached_path)
         except Exception as e:
-            # Vi loggar bara felet här om det är en kritisk hämtning (sker via st.spinner senare)
+            st.error(f"❌ Fel vid hämtning av '{file_name}': {e}")
             return None
     else:
         # Lokalt: Använd den befintliga sökvägen
