@@ -413,10 +413,7 @@ def get_pdf_path(relative_path):
             token = get_hf_token()
             file_name = Path(relative_path).name
             
-            # Maskad token för debug
-            masked_token = f"{token[:6]}...{token[-3:]}" if token and len(token) > 10 else "MISSING"
-            # print(f"DEBUG PDF: Försöker hämta {file_name} från {repo_id} med token {masked_token}")
-            
+            # Försök ladda ner
             cached_path = hf_hub_download(
                 repo_id=repo_id, 
                 repo_type="dataset", 
@@ -425,7 +422,7 @@ def get_pdf_path(relative_path):
             )
             return Path(cached_path)
         except Exception as e:
-            st.error(f"❌ Fel vid hämtning av PDF ({Path(relative_path).name}): {e}")
+            # Vi loggar bara felet här om det är en kritisk hämtning (sker via st.spinner senare)
             return None
     else:
         # Lokalt: Använd den befintliga sökvägen
@@ -599,7 +596,14 @@ def show_references_section():
                 citation_id = i + 1
                 path_str = doc.metadata.get("full_path")
                 page_num = doc.metadata.get("page")
-                full_os_path = get_pdf_path(path_str) if not IS_CLOUD else Path(path_str)
+                
+                # Bestäm sökväg för listvisning (utan att ladda ner i molnet än)
+                if IS_CLOUD:
+                    # I molnet sparar vi bara den relativa sökvägen tills användaren klickar
+                    local_ref_path = path_str 
+                else:
+                    # Lokalt kan vi kolla sökvägen direkt
+                    local_ref_path = RAW_DATA_DIR / path_str
                 
                 with st.container():
                     st.markdown(f"""
@@ -613,9 +617,19 @@ def show_references_section():
                     
                     with c_open:
                         if st.button(f"📄 Visa källa", key=f"open_{i}"):
-                            st.session_state.selected_pdf = full_os_path
-                            st.session_state.selected_page = page_num
-                            st.rerun()
+                            if IS_CLOUD:
+                                with st.spinner("📥 Hämtar dokument..."):
+                                    actual_path = get_pdf_path(path_str)
+                                    if actual_path:
+                                        st.session_state.selected_pdf = actual_path
+                                        st.session_state.selected_page = page_num
+                                        st.rerun()
+                                    else:
+                                        st.error("Kunde inte hämta dokumentet från molnet.")
+                            else:
+                                st.session_state.selected_pdf = local_ref_path
+                                st.session_state.selected_page = page_num
+                                st.rerun()
                     
                     with c_path:
                         with st.popover("📂 Visa sökväg"):
