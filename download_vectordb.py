@@ -18,8 +18,8 @@ def download_and_extract_vectordb():
     
     # Konfiguration
     url = f"https://drive.google.com/uc?export=download&id={file_id}"
-    output_zip = "vector_db.zip"
-    output_dir = "vector_db"
+    output_zip = "vector_db_bgem3.zip"
+    output_dir = "vector_db_bgem3"
     
     # Kolla om databasen redan finns
     if Path(output_dir).exists() and Path(output_dir, "chroma.sqlite3").exists():
@@ -94,7 +94,7 @@ def download_and_extract_vectordb():
 
 def get_database_info():
     """Returnera information om databasen"""
-    db_path = Path("vector_db")
+    db_path = Path("vector_db_bgem3")
     
     if not db_path.exists():
         return {

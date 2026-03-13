@@ -4,6 +4,7 @@ import pandas as pd
 import hashlib
 import json
 import bcrypt
+import threading
 from pathlib import Path
 from dotenv import load_dotenv
 import io
@@ -12,12 +13,8 @@ import tempfile
 import time
 from datetime import datetime
 
-# Importera nedladdningsfunktionen
-from download_vectordb import download_and_extract_vectordb
-
 # Projektets sökvägar
 from src.utils.paths import PROJECT_ROOT, VECTOR_DB_DIR, RAW_DATA_DIR
-import torch
 
 # Användarhantering (delad modul)
 from src.utils.user_management import (
@@ -29,15 +26,20 @@ from src.utils.user_management import (
     get_user_role, USERS_FILE
 )
 
-# LangChain & Chroma
-from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
+# Bakgrundsladdare för att snabba upp uppstarten
+def prewarm_resources_silent():
+    """Importerar tunga moduler i bakgrunden så att de redan finns i cachen när användaren loggat in."""
+    try:
+        import torch
+        from langchain_huggingface import HuggingFaceEmbeddings
+        from langchain_chroma import Chroma
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        # Vi försöker inte anropa streamlit-funktioner härifrån för att undvika kontext-fel
+    except:
+        pass
 
-# PDF Viewer
-from streamlit_pdf_viewer import pdf_viewer
+# Starta bakgrundsladdningen direkt
+threading.Thread(target=prewarm_resources_silent, daemon=True).start()
 
 # ==========================================
 # 0. AUTENTISERING
@@ -136,6 +138,16 @@ if not check_authentication():
     login_page()
     st.stop()
 
+# --- TUNGA IMPORTER (Händer bara efter inlogg) ---
+import torch
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from streamlit_pdf_viewer import pdf_viewer
+from download_vectordb import download_and_extract_vectordb
+
 load_dotenv()
 
 # Detektera om vi kör lokalt eller i molnet
@@ -144,7 +156,7 @@ IS_CLOUD = os.environ.get("STREAMLIT_RUNTIME_ENV") == "cloud"
 if IS_CLOUD:
     # Molnkonfiguration - använd relativa paths (för Streamlit Cloud)
     BASE_DIR = Path(".")
-    DB_DIR = BASE_DIR / "vector_db"
+    DB_DIR = BASE_DIR / "vector_db_bgem3"
     RAW_DATA_DIR = BASE_DIR / "pdfs"
 else:
     # Lokal konfiguration - använd centraliserade sökvägar från src.utils.paths
