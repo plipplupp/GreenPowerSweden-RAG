@@ -356,11 +356,13 @@ def load_resources():
     if not DB_DIR.exists():
             if IS_CLOUD:
                 with st.spinner("📥 Laddar ner och packar upp vektordatabasen... (Detta sker bara en gång)"):
-                    # Anropa funktionen från din andra fil
-                    success = download_and_extract_vectordb()
+                    # Anropa funktionen med en container för att visa loggar
+                    status_placeholder = st.empty()
+                    success, error_msg = download_and_extract_vectordb(st_container=status_placeholder)
                     
                     if not success:
-                        st.error("❌ Misslyckades att ladda ner databasen från Hugging Face. Kontrollera att ditt HF_TOKEN i Secrets har läsrättigheter till datasetet.")
+                        st.error(f"❌ Misslyckades att ladda ner databasen från Hugging Face: {error_msg}")
+                        st.info("Tips: Kontrollera att ditt HF_TOKEN i Secrets har läsrättigheter till datasetet 'greenpowersweden/solveig-db'.")
                         return None, None
                     else:
                         st.success("✅ Databas laddad!")

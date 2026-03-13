@@ -19,41 +19,61 @@ def get_hf_token():
     # 2. Kolla miljövariabler ( fallback, viktigt för vissa miljöer)
     return os.environ.get('HF_TOKEN') or os.environ.get('HF_WRITE_TOKEN')
 
-def download_and_extract_vectordb():
+def download_and_extract_vectordb(st_container=None):
     """
     Ladda ner vektordatabasen från Hugging Face Dataset.
     """
     repo_id = "greenpowersweden/solveig-db"
     output_dir = Path("vector_db_bgem3")
     
+    def log(msg, type="info"):
+        print(msg)
+        if st_container:
+            if type == "error":
+                st_container.error(msg)
+            elif type == "success":
+                st_container.success(msg)
+            else:
+                st_container.info(msg)
+
     # Kolla om databasen redan finns och är komplett
     if output_dir.exists() and (output_dir / "chroma.sqlite3").exists():
-        print("✅ Vektordatabasen finns redan!")
-        return True
+        log("✅ Vektordatabasen finns redan!", "success")
+        return True, "Redan installerad"
     
     token = get_hf_token()
     if not token:
-        print("⚠️ HF_TOKEN saknas. Kan inte ladda ner privat dataset.")
-        return False
+        msg = "⚠️ HF_TOKEN saknas. Kan inte ladda ner privat dataset."
+        log(msg, "error")
+        return False, msg
 
     try:
-        print(f"📥 Laddar ner vektordatabas från Hugging Face ({repo_id})...")
+        log(f"📥 Laddar ner vektordatabas från Hugging Face ({repo_id})...")
         
-        # Ladda ner mappen 'db' från datasetet
-        downloaded_path = snapshot_download(
-            repo_id=repo_id,
-            repo_type="dataset",
-            token=token,
-            allow_patterns="db/*"
-        )
-        
+        # Ladda ner från datasetet
+        try:
+            downloaded_path = snapshot_download(
+                repo_id=repo_id,
+                repo_type="dataset",
+                token=token
+            )
+        except Exception as e:
+            msg = f"❌ Snapshot download misslyckades: {e}"
+            log(msg, "error")
+            return False, msg
+            
         source_db_path = Path(downloaded_path) / "db"
         
+        # Fallback: Om filerna ligger direkt i roten istället för 'db/'
         if not source_db_path.exists():
-            print(f"❌ Kunde inte hitta 'db'-mappen i nerladdat material: {downloaded_path}")
-            return False
+            if (Path(downloaded_path) / "chroma.sqlite3").exists():
+                source_db_path = Path(downloaded_path)
+            else:
+                msg = f"❌ Kunde inte hitta databasfiler i {downloaded_path}"
+                log(msg, "error")
+                return False, msg
             
-        print(f"✅ Nedladdning klar! Kopierar till {output_dir}...")
+        log(f"✅ Nedladdning klar! Kopierar till {output_dir.absolute()}...")
         
         # Kopiera innehållet till projektmappen
         if output_dir.exists():
@@ -61,12 +81,13 @@ def download_and_extract_vectordb():
             
         shutil.copytree(source_db_path, output_dir)
         
-        print(f"✅ Vektordatabasen är redo!")
-        return True
+        log(f"✅ Vektordatabasen är redo!", "success")
+        return True, "Success"
         
     except Exception as e:
-        print(f"❌ Fel vid nedladdning: {e}")
-        return False
+        msg = f"❌ Oväntat fel: {e}"
+        log(msg, "error")
+        return False, msg
 
 def get_database_info():
     """Returnera information om databasen"""
