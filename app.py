@@ -121,17 +121,25 @@ def get_user_credentials():
         except:
             pass
     
-    # 3. Fallback: Environment variables
+    # 3. Fallback: Environment variables (Viktigt för HF Spaces)
     if not users:
-        for key, value in os.environ.items():
-            if key.startswith("USER_CRED_"):
-                username = key.replace("USER_CRED_", "").lower()
-                users[username] = value
+        u_dict_env = os.environ.get('USERS_DICT')
+        if u_dict_env:
+            try:
+                import json
+                users_data = json.loads(u_dict_env)
+                for uname, pw_hash in users_data.items():
+                    users[uname.lower().strip()] = pw_hash
+            except Exception as e:
+                # Logga fel till konsolen tyst
+                print(f"DEBUG: Kunde inte parsa USERS_DICT från env: {e}")
+                pass
     
     # 4. Om inga användare definierats alls, visa varning
     if not users:
-        st.warning("⚠️ Inga användare konfigurerade. Kör `streamlit run admin.py` för att skapa den första admin-användaren.")
-        users["admin"] = hash_password("changeme123")
+        st.warning("⚠️ Inga användare konfigurerade. Kontrollera dina Secrets på Hugging Face.")
+        # Skapa en tillfällig admin om allt annat fallerar så man kan felsöka
+        users["admin"] = hash_password_sha256("solveig2024")
     
     return users
 
