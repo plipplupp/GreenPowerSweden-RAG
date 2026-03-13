@@ -540,11 +540,7 @@ def show_chat_page():
                             response, docs = get_rag_response(prompt, sys_prompt, k=10)
                             st.markdown(response)
 
-                NEGATIVE_PHRASE = "Jag har granskat de tillhandahållna dokumenten"
-                if response.strip().startswith(NEGATIVE_PHRASE):
-                    final_sources = []
-                else:
-                    final_sources = docs
+                final_sources = docs
                 
                 st.session_state.messages.append({"role": "assistant", "content": response})
                 st.session_state.current_sources = final_sources
