@@ -411,18 +411,23 @@ def get_pdf_path(relative_path):
         try:
             repo_id = "greenpowersweden/solveig-data"
             token = get_hf_token()
-            file_name = Path(relative_path).name
             
-            # Försök ladda ner
+            # Normalisera sökvägen (ersätt \ med / om det råkar finnas kvar från Windows-data)
+            # Vi tar bort 'pdfs/' prefixet om det råkar finnas i metadata
+            clean_path = str(relative_path).replace("\\", "/")
+            if clean_path.startswith("pdfs/"):
+                clean_path = clean_path[5:]
+            
+            # Försök ladda ner med den fullständiga relativa sökvägen (bevarar mappar som 'domar/')
             cached_path = hf_hub_download(
                 repo_id=repo_id, 
                 repo_type="dataset", 
-                filename=file_name, 
+                filename=clean_path, 
                 token=token
             )
             return Path(cached_path)
         except Exception as e:
-            st.error(f"❌ Fel vid hämtning av '{file_name}': {e}")
+            st.error(f"❌ Fel vid hämtning av '{relative_path}': {e}")
             return None
     else:
         # Lokalt: Använd den befintliga sökvägen
