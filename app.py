@@ -907,10 +907,10 @@ def show_admin_page():
                 if ok:
                     st.success(f"✅ {msg} Secrets.toml uppdaterades automatiskt.")
                     st.balloons()
-                    time.sleep(2.0)
                     for key in ["admin_new_username", "admin_new_password", "admin_confirm_password"]:
                         if key in st.session_state:
                             del st.session_state[key]
+                    time.sleep(2.0)
                     st.rerun()
                 else:
                     st.error(f"❌ {msg}")

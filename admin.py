@@ -443,10 +443,10 @@ def main():
                 if ok:
                     st.markdown(f'<div class="success-box">✅ {msg} Secrets.toml uppdaterades automatiskt!</div>', unsafe_allow_html=True)
                     st.balloons()
-                    time.sleep(2.0)
                     for key in ["admintool_new_username", "admintool_new_password", "admintool_confirm_password"]:
                         if key in st.session_state:
                             del st.session_state[key]
+                    time.sleep(2.0)
                     st.rerun()
                 else:
                     st.markdown(f'<div class="error-box">❌ {msg}</div>', unsafe_allow_html=True)
