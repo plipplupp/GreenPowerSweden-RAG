@@ -287,18 +287,31 @@ st.markdown("""
         font-weight: 500;
     }
     
-    /* Blå primärfärg istället för röd */
-    div.stButton > button[kind="primary"] {
+    /* Blå primärfärg istället för röd (gäller även formulär-knappar) */
+    div.stButton > button[kind="primary"],
+    div[data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"] {
         background-color: #2196F3 !important;
         border-color: #2196F3 !important;
         color: white !important;
         transition: all 0.2s ease;
     }
-    div.stButton > button[kind="primary"]:hover {
+    div.stButton > button[kind="primary"]:hover,
+    div[data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"]:hover {
         background-color: #1976D2 !important;
         border-color: #1976D2 !important;
         color: white !important;
         box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+    }
+    
+    /* Fokusvy knapp grön (Söker på tooltip) */
+    div[data-testid="stTooltipHoverTarget"][title*="grön"] > button {
+        background-color: #4CAF50 !important;
+        border-color: #4CAF50 !important;
+        color: white !important;
+    }
+    div[data-testid="stTooltipHoverTarget"][title*="grön"] > button:hover {
+        background-color: #43A047 !important;
+        border-color: #43A047 !important;
     }
     
     div.row-widget.stButton > button[kind="secondary"]:hover {
@@ -395,7 +408,7 @@ def load_resources():
                         st.info("Tips: Kontrollera att ditt HF_TOKEN i Secrets har läsrättigheter till datasetet 'greenpowersweden/solveig-db'.")
                         return None, None
                     else:
-                        st.success("✅ Databas laddad!")
+                        st.toast("✅ Databas laddad!")
             else:
                 # Om vi är lokalt och den saknas
                 st.error(f"⚠️ Kunde inte hitta vektordatabasen på: {DB_DIR}")
@@ -416,7 +429,7 @@ def load_resources():
         return vectordb, None
     
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model="gemini-3.1-flash-lite-preview",
         temperature=0.3,
         google_api_key=api_key
     )
@@ -481,10 +494,12 @@ def show_pdf_or_message(doc_path, page_num):
     if st.session_state.get("focus_mode", False):
         _, cent_co, _ = st.columns([1, 8, 1])
         with cent_co:
-            pdf_viewer(str(doc_path), height=800, width="100%")
+            with st.container(border=True):
+                pdf_viewer(str(doc_path), height=800, width="100%")
     else:
         # I normalt läge är kolumnen redan smal (40%), så använd hela bredden
-        pdf_viewer(str(doc_path), height=800, width="100%")
+        with st.container(border=True):
+            pdf_viewer(str(doc_path), height=800, width="100%")
 
 # ==========================================
 # 4. RAG FUNKTIONER
@@ -596,7 +611,7 @@ def show_references_section():
     
     # Knapp för att växla fokusvy
     focus_label = "🏥 Lämna fokusvy (visa chatt)" if st.session_state.focus_mode else "🔍 Fokusvy (maximera dokument)"
-    if st.button(focus_label, type="secondary", use_container_width=True):
+    if st.button(focus_label, type="secondary", use_container_width=True, help="grön"):
         st.session_state.focus_mode = not st.session_state.focus_mode
         st.rerun()
     
@@ -606,7 +621,7 @@ def show_references_section():
         doc_path = st.session_state.selected_pdf
         page = st.session_state.selected_page
         
-        if st.button("⬅️ Tillbaka till listan"):
+        if st.button("⬅️ Tillbaka till listan", type="primary"):
             st.session_state.selected_pdf = None
             st.session_state.selected_page = 1
             st.rerun()
@@ -660,8 +675,9 @@ def show_references_section():
                                 st.rerun()
                     
                     with c_path:
-                        with st.popover("📂 Visa sökväg"):
-                            st.code(path_str, language="text")
+                        if is_admin_cloud(st.session_state.username):
+                            with st.popover("📂 Visa sökväg"):
+                                st.code(path_str, language="text")
                             
                     with c_text:
                         with st.popover("📝 Läs avsnitt"):
@@ -833,8 +849,8 @@ def show_admin_page():
                     type="password",
                     placeholder="Minst 8 tecken...",
                     help="Lösenordet hashas med bcrypt innan det sparas.",
-                    key="admin_new_password",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    key="admin_new_password"
                 )
             with col_pw_gen:
                 if st.button("☀️ Generera", use_container_width=True, key="gen_pw_btn"):
@@ -1140,9 +1156,9 @@ def main():
                 st.session_state.current_page = "Admin"
                 st.rerun()
         
-        st.divider()
-        
-        if st.button("🚪 Logga ut", type="secondary"):
+        # Utloggnings-knapp längst ner
+        st.markdown("---")
+        if st.button("🔒 Logga ut", type="secondary"):
             logout()
 
     if st.session_state.current_page == "Sök & Analys":

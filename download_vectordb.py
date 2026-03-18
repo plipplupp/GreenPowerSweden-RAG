@@ -29,10 +29,11 @@ def download_and_extract_vectordb(st_container=None):
     def log(msg, type="info"):
         print(msg)
         if st_container:
+            import streamlit as st
             if type == "error":
                 st_container.error(msg)
             elif type == "success":
-                st_container.success(msg)
+                st.toast(msg)
             else:
                 st_container.info(msg)
 
