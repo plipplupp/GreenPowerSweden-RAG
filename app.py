@@ -913,6 +913,7 @@ def show_admin_page():
                     st.balloons()
                     # Nollställ formulär genom att ändra nyckeln
                     st.session_state.admin_form_trigger += 1
+                    st.session_state.generated_passwords = []
                     time.sleep(2.0)
                     st.rerun()
                 else:
