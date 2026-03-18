@@ -64,10 +64,12 @@ def login_page():
     
     with col2:
         st.markdown("---")
-        username = st.text_input("Användarnamn", key="login_username")
-        password = st.text_input("Lösenord", type="password", key="login_password")
-        
-        if st.button("Logga in", type="primary", width="stretch"):
+        with st.form(key="login_form", clear_on_submit=False):
+            username = st.text_input("Användarnamn")
+            password = st.text_input("Lösenord", type="password")
+            submitted = st.form_submit_button("Logga in", type="primary", use_container_width=True)
+            
+        if submitted:
             # Hämta användaruppgifter
             valid_users = get_user_credentials()
             
@@ -284,7 +286,22 @@ st.markdown("""
         border-radius: 6px;
         font-weight: 500;
     }
-    div.row-widget.stButton > button:hover {
+    
+    /* Blå primärfärg istället för röd */
+    div.stButton > button[kind="primary"] {
+        background-color: #2196F3 !important;
+        border-color: #2196F3 !important;
+        color: white !important;
+        transition: all 0.2s ease;
+    }
+    div.stButton > button[kind="primary"]:hover {
+        background-color: #1976D2 !important;
+        border-color: #1976D2 !important;
+        color: white !important;
+        box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+    }
+    
+    div.row-widget.stButton > button[kind="secondary"]:hover {
         border-color: #2196F3;
         color: #2196F3;
         background-color: #f0f7ff;
@@ -883,6 +900,9 @@ def show_admin_page():
                     st.success(f"✅ {msg} Secrets.toml uppdaterades automatiskt.")
                     st.balloons()
                     time.sleep(2.0)
+                    for key in ["admin_new_username", "admin_new_password", "admin_confirm_password"]:
+                        if key in st.session_state:
+                            del st.session_state[key]
                     st.rerun()
                 else:
                     st.error(f"❌ {msg}")

@@ -181,16 +181,17 @@ st.markdown("""
     }
     
     div.stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #3a7bd5, #2d5a8e) !important;
+        background: linear-gradient(135deg, #a8e063, #56ab2f) !important;
+        color: #fff !important;
         border: none !important;
         border-radius: 8px !important;
         font-weight: 600 !important;
         padding: 0.6rem 1.5rem !important;
         transition: all 0.3s ease !important;
-        box-shadow: 0 2px 8px rgba(58, 123, 213, 0.3) !important;
+        box-shadow: 0 2px 8px rgba(86, 171, 47, 0.3) !important;
     }
     div.stButton > button[kind="primary"]:hover {
-        box-shadow: 0 4px 16px rgba(58, 123, 213, 0.4) !important;
+        box-shadow: 0 4px 16px rgba(86, 171, 47, 0.4) !important;
         transform: translateY(-1px) !important;
     }
     
@@ -296,7 +297,7 @@ def main():
     
     col_sync1, col_sync2, col_sync3 = st.columns([1, 2, 1])
     with col_sync2:
-        if st.button("☁️ Synka från molnet (Hugging Face)", use_container_width=True):
+        if st.button("☁️ Synka från molnet", type="primary", use_container_width=True):
             with st.spinner("Synkar..."):
                 ok, msg = sync_users_from_hf()
                 if ok:
@@ -356,7 +357,8 @@ def main():
             new_username = st.text_input(
                 "Användarnamn",
                 placeholder="t.ex. anna.svensson",
-                help="Användarnamnet kan innehålla bokstäver, siffror, punkt och understreck."
+                help="Användarnamnet kan innehålla bokstäver, siffror, punkt och understreck.",
+                key="admintool_new_username"
             )
             
             # Lösenordsgenerator
@@ -371,7 +373,8 @@ def main():
                     type="password",
                     placeholder="Minst 8 tecken...",
                     help="Lösenordet hashas med bcrypt innan det sparas.",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    key="admintool_new_password"
                 )
             with col_pw_gen:
                 if st.button("☀️ Generera", use_container_width=True, key="gen_pw_btn"):
@@ -390,7 +393,8 @@ def main():
             confirm_password = st.text_input(
                 "Bekräfta lösenord",
                 type="password",
-                placeholder="Upprepa lösenordet..."
+                placeholder="Upprepa lösenordet...",
+                key="admintool_confirm_password"
             )
             
             new_role = st.selectbox(
@@ -440,6 +444,9 @@ def main():
                     st.markdown(f'<div class="success-box">✅ {msg} Secrets.toml uppdaterades automatiskt!</div>', unsafe_allow_html=True)
                     st.balloons()
                     time.sleep(2.0)
+                    for key in ["admintool_new_username", "admintool_new_password", "admintool_confirm_password"]:
+                        if key in st.session_state:
+                            del st.session_state[key]
                     st.rerun()
                 else:
                     st.markdown(f'<div class="error-box">❌ {msg}</div>', unsafe_allow_html=True)
