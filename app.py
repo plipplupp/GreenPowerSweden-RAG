@@ -249,6 +249,9 @@ if "focus_mode" not in st.session_state:
 # --- CSS STYLING ---
 st.markdown("""
 <style>
+    .block-container {
+        padding-top: 2rem !important;
+    }
     section[data-testid="stSidebar"] button {
         width: 200px !important;
         background-color: #f8f9fa;
@@ -600,7 +603,7 @@ def show_references_section():
     
     # Knapp för att växla fokusvy
     focus_label = "💬 Lämna fokusvy (visa chatt)" if st.session_state.focus_mode else "🔍 Fokusvy (maximera dokument)"
-    if st.button(focus_label, type="secondary", use_container_width=True):
+    if st.button(focus_label, type="primary", use_container_width=True):
         st.session_state.focus_mode = not st.session_state.focus_mode
         st.rerun()
     
