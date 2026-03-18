@@ -250,7 +250,7 @@ if "focus_mode" not in st.session_state:
 st.markdown("""
 <style>
     .block-container {
-        padding-top: 2rem !important;
+        padding-top: 3.5rem !important;
     }
     section[data-testid="stSidebar"] button {
         width: 200px !important;
@@ -413,6 +413,7 @@ def load_resources():
 # Förbered DB om den inte existerar
 if not DB_DIR.exists():
     if IS_CLOUD:
+        st.markdown("<br>", unsafe_allow_html=True)
         with st.spinner("📥 Laddar ner och packar upp vektordatabasen... (Detta sker bara en gång)"):
             success, error_msg = download_and_extract_vectordb()
             if not success:
