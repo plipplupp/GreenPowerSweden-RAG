@@ -16,6 +16,80 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 USERS_FILE = PROJECT_ROOT / "data" / "users.json"
 SECRETS_FILE = PROJECT_ROOT / ".streamlit" / "secrets.toml"
 
+HF_REPO_ID = "greenpowersweden/solveig-db"
+
+def get_hf_token():
+    """Försök hämta HF_TOKEN eller HF_WRITE_TOKEN."""
+    try:
+        import streamlit as st
+        if hasattr(st, 'secrets'):
+            if 'HF_WRITE_TOKEN' in st.secrets: return st.secrets['HF_WRITE_TOKEN']
+            if 'HF_TOKEN' in st.secrets: return st.secrets['HF_TOKEN']
+    except Exception:
+        pass
+    
+    import os
+    token = os.environ.get('HF_WRITE_TOKEN') or os.environ.get('HF_TOKEN')
+    
+    # Fallback to toml if local
+    if not token and SECRETS_FILE.exists():
+        try:
+            import toml
+            secrets = toml.load(SECRETS_FILE)
+            token = secrets.get("HF_WRITE_TOKEN") or secrets.get("HF_TOKEN")
+        except:
+            pass
+    return token
+
+def sync_users_from_hf():
+    """Laddar ner senaste users.json från HF-datasetet om tillgängligt."""
+    token = get_hf_token()
+    if not token:
+        return False, "Kunde inte hitta HF_TOKEN för att synkronisera."
+    
+    try:
+        from huggingface_hub import hf_hub_download
+        import shutil
+        cached_path = hf_hub_download(
+            repo_id=HF_REPO_ID,
+            repo_type="dataset",
+            filename="users.json",
+            token=token,
+            force_download=True
+        )
+        
+        USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(cached_path, USERS_FILE)
+        
+        return True, "Användare har synkroniserats från molnet."
+    except Exception as e:
+        return False, f"Misslyckades att hämta från molnet: {e}"
+
+def sync_users_to_hf():
+    """Laddar upp lokal users.json till HF-datasetet."""
+    if not USERS_FILE.exists():
+        return False, "Ingen lokal users.json att ladda upp."
+        
+    token = get_hf_token()
+    if not token:
+        return False, "Kunde inte hitta HF_TOKEN för att synkronisera."
+        
+    try:
+        from huggingface_hub import HfApi
+        api = HfApi()
+        api.upload_file(
+            path_or_fileobj=str(USERS_FILE),
+            path_in_repo="users.json",
+            repo_id=HF_REPO_ID,
+            repo_type="dataset",
+            token=token,
+            commit_message="Auto-sync users.json"
+        )
+        return True, "Användare har laddats upp till molnet."
+    except Exception as e:
+        return False, f"Misslyckades att ladda upp till molnet: {e}"
+
+
 
 # ==========================================
 # LÖSENORDSGENERATOR – Sol/Energi-tema
@@ -207,6 +281,7 @@ def create_user(username: str, password: str, role: str = "user",
     
     save_users(users)
     update_secrets_file(users)
+    sync_users_to_hf()
     return True, f"Användare '{username_clean}' skapades!"
 
 
@@ -224,6 +299,7 @@ def reset_user_password(username: str, new_password: str) -> tuple[bool, str]:
     users[username]["updated_at"] = datetime.now().isoformat()
     save_users(users)
     update_secrets_file(users)
+    sync_users_to_hf()
     return True, f"Lösenord uppdaterat för '{username}'."
 
 
@@ -236,6 +312,7 @@ def delete_user(username: str) -> tuple[bool, str]:
     del users[username]
     save_users(users)
     update_secrets_file(users)
+    sync_users_to_hf()
     return True, f"Användare '{username}' borttagen."
 
 
@@ -248,7 +325,7 @@ def generate_secrets_toml_snippet(users: dict) -> str:
     lines = ["[users]"]
     for username, info in users.items():
         hashed = info["password_hash"]
-        lines.append(f'{username} = "{hashed}"')
+        lines.append(f'"{username}" = "{hashed}"')
     return "\n".join(lines)
 
 
@@ -270,7 +347,7 @@ def update_secrets_file(users: dict):
     users_section = "\n[users]\n"
     for username, info in users.items():
         hashed = info["password_hash"]
-        users_section += f'{username} = "{hashed}"\n'
+        users_section += f'"{username}" = "{hashed}"\n'
     
     # Kombinera
     new_content = cleaned + "\n\n" + users_section.strip() + "\n"

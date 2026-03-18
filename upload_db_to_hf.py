@@ -13,12 +13,19 @@ def upload_db_to_hf():
     if not token:
         try:
             import toml
-            secrets_path = Path("/Users/gustav_jeansson/Documents/Data Science/GreenPowerSweden/.streamlit/secrets.toml")
+            # Hitta secrets.toml relativt till projektets rot
+            script_dir = Path(__file__).resolve().parent
+            secrets_path = script_dir / ".streamlit" / "secrets.toml"
+            
             if secrets_path.exists():
                 secrets = toml.load(secrets_path)
                 # Prioritera en dedikerad WRITE-token om den finns
                 token = secrets.get("HF_WRITE_TOKEN") or secrets.get("HF_TOKEN")
-        except Exception:
+            else:
+                print(f"ℹ️ Hittade ingen secrets.toml på {secrets_path}")
+        except Exception as e:
+            print(f"⚠️ Fel vid inläsning av secrets.toml: {e}")
+            print("   Tips: Kontrollera att filen har korrekt TOML-syntax (t.ex. citat runt e-postadresser).")
             pass
             
     if not token:

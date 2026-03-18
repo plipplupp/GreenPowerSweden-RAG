@@ -23,7 +23,8 @@ from src.utils.user_management import (
     load_users, save_users, create_user, delete_user, reset_user_password,
     hash_password_bcrypt, verify_password_bcrypt, validate_password,
     password_strength, generate_multiple_passwords,
-    generate_secrets_toml_snippet, update_secrets_file, USERS_FILE
+    generate_secrets_toml_snippet, update_secrets_file, USERS_FILE,
+    sync_users_from_hf, sync_users_to_hf
 )
 
 # ==========================================
@@ -36,6 +37,14 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="collapsed"
 )
+
+if "users_synced" not in st.session_state:
+    try:
+        from src.utils.user_management import sync_users_from_hf
+        sync_users_from_hf()
+    except:
+        pass
+    st.session_state.users_synced = True
 
 
 # ==========================================
@@ -284,6 +293,18 @@ def main():
         <p>Hantera användare och behörigheter</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    col_sync1, col_sync2, col_sync3 = st.columns([1, 2, 1])
+    with col_sync2:
+        if st.button("☁️ Synka från molnet (Hugging Face)", use_container_width=True):
+            with st.spinner("Synkar..."):
+                ok, msg = sync_users_from_hf()
+                if ok:
+                    st.success(f"✅ {msg}")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error(f"❌ {msg}")
     
     users = load_users()
     
@@ -551,66 +572,47 @@ def main():
     # ======================
     with tab_export:
         st.markdown("")
-        st.markdown('<div class="section-title">Exportera konfiguration</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">☁️ Synka till Hugging Face</div>', unsafe_allow_html=True)
         
         users = load_users()
         
         if not users:
-            st.info("Inga användare att exportera. Skapa en användare först!")
+            st.info("Inga användare att synka. Skapa en användare först!")
         else:
-            st.markdown("`secrets.toml` **genereras automatiskt** när du lägger till eller ändrar användare.")
+            st.success("☁️ **Automatisk molnsynkning aktiverad:** Du behöver inte längre manuellt kopiera json-koder och klistra in dem på HuggingFace. Alla ändringar synkroniseras nu automatiskt till en säker databas på Hugging Face i bakgrunden! För att tvinga en manuell synkronisering kan du använda knapparna längst nere.")
+            
+            st.divider()
+            st.markdown('<div class="section-title">📄 Lokal Backup & Secrets.toml</div>', unsafe_allow_html=True)
+            
+            st.markdown("`secrets.toml` **genereras automatiskt** lokalt när du sparar användare precis som innan.")
             
             st.markdown("")
-            st.markdown("##### 📋 Aktuell `[users]`-sektion för `secrets.toml`")
+            st.markdown("##### 📋 Aktuell `[users]`-sektion för lokal `secrets.toml`")
             
             snippet = generate_secrets_toml_snippet(users)
             st.code(snippet, language="toml")
             
-            st.markdown("""
-            <div class="info-box">
-                💡 <strong>Tips för Streamlit Cloud:</strong> Kopiera ovanstående och klistra in under 
-                <em>App settings → Secrets</em> i din Streamlit Cloud-app.
-            </div>
-            """, unsafe_allow_html=True)
-            
             st.markdown("")
-            st.markdown("##### 📄 Fullständig användardata (JSON)")
-            
-            users_json = json.dumps(users, indent=2, ensure_ascii=False)
-            st.download_button(
-                label="💾 Ladda ner users.json",
-                data=users_json,
-                file_name="users_backup.json",
-                mime="application/json",
-                use_container_width=True
-            )
-            
-            st.markdown("")
-            st.markdown("##### 🔍 Verifiera lösenord")
-            
-            col_verify_user, col_verify_pw = st.columns(2)
-            with col_verify_user:
-                verify_user = st.selectbox(
-                    "Användare",
-                    options=list(users.keys()),
-                    key="verify_user_select"
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                st.markdown("##### 💾 Spara ner backup (JSON)")
+                users_json_pretty = json.dumps(users, indent=2, ensure_ascii=False)
+                st.download_button(
+                    label="Ladda ner users.json",
+                    data=users_json_pretty,
+                    file_name="users_backup.json",
+                    mime="application/json",
+                    use_container_width=True
                 )
-            with col_verify_pw:
-                verify_pw = st.text_input(
-                    "Lösenord att testa",
-                    type="password",
-                    key="verify_pw_input",
-                    placeholder="Skriv lösenordet..."
-                )
-            
-            if st.button("🔍 Verifiera", use_container_width=True):
-                if verify_pw and verify_user in users:
-                    if verify_password_bcrypt(verify_pw, users[verify_user]["password_hash"]):
-                        st.markdown('<div class="success-box">✅ Lösenordet är korrekt!</div>', unsafe_allow_html=True)
-                    else:
-                        st.markdown('<div class="error-box">❌ Fel lösenord.</div>', unsafe_allow_html=True)
-                else:
-                    st.error("Ange ett lösenord att testa.")
+            with col_b2:
+                st.markdown("##### 🚀 Manuellt tvinga uppladdning")
+                if st.button("Ladda upp till molnet", use_container_width=True):
+                    with st.spinner("Laddar upp..."):
+                        ok, msg = sync_users_to_hf()
+                        if ok:
+                            st.success(f"✅ {msg}")
+                        else:
+                            st.error(f"❌ {msg}")
     
     # Footer
     st.markdown("")

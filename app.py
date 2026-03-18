@@ -183,6 +183,16 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+if "users_synced" not in st.session_state:
+    try:
+        from src.utils.user_management import sync_users_from_hf
+        ok, msg = sync_users_from_hf()
+        if not ok:
+            st.error(f"Molnsynkning misslyckades vid uppstart: {msg}")
+    except Exception as e:
+        st.error(f"Ett oväntat fel skedde vid synkning: {e}")
+    st.session_state.users_synced = True
+
 # Kontrollera autentisering FÖRST
 if not check_authentication():
     login_page()
@@ -1012,40 +1022,40 @@ def show_admin_page():
                         else:
                             st.error("Du måste skriva användarnamnet exakt för att bekräfta.")
     
-    # ======================
-    # TAB 3: Export / Secrets
-    # ======================
     with tab_export:
         st.markdown("")
-        st.subheader("Exportera konfiguration")
+        st.subheader("Synkronisering & Backup")
         
         users = load_users()
         
         if not users:
-            st.info("Inga användare att exportera. Skapa en användare först!")
+            st.info("Inga användare att visa ännu. Skapa en användare först!")
         else:
-            st.markdown("`secrets.toml` **uppdateras automatiskt** när du lägger till eller ändrar användare. Nedan kan du se aktuell konfiguration.")
+            st.success("☁️ **Automatisk molnsynkning:** Alla ändringar du gör i användare synkroniseras nu automatiskt till en säker databas på Hugging Face. Du behöver inte längre manuellt kopiera lösenord!")
             
             st.markdown("")
-            st.markdown("##### 📋 Aktuell `[users]`-sektion för `secrets.toml`")
-            
-            snippet = generate_secrets_toml_snippet(users)
-            st.code(snippet, language="toml")
-            
-            st.info("💡 **Tips för Streamlit Cloud:** Kopiera ovanstående och klistra in under *App settings → Secrets* i din Streamlit Cloud-app.")
-            
-            st.markdown("")
-            st.markdown("##### 📄 Fullständig användardata (JSON)")
-            
-            users_json = json.dumps(users, indent=2, ensure_ascii=False)
-            st.download_button(
-                label="💾 Ladda ner users.json",
-                data=users_json,
-                file_name="users_backup.json",
-                mime="application/json",
-                use_container_width=True,
-                key="app_download_users_json"
-            )
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                st.markdown("##### 💾 Spara ner lokal backup")
+                users_json = json.dumps(users, indent=2, ensure_ascii=False)
+                st.download_button(
+                    label="Ladda ner users.json",
+                    data=users_json,
+                    file_name="users_backup.json",
+                    mime="application/json",
+                    use_container_width=True,
+                    key="app_download_users_json"
+                )
+            with col_b2:
+                st.markdown("##### 🚀 Manuellt tvinga synkronisering")
+                if st.button("Ladda upp till molnet", use_container_width=True):
+                    with st.spinner("Laddar upp..."):
+                        from src.utils.user_management import sync_users_to_hf
+                        ok, msg = sync_users_to_hf()
+                        if ok:
+                            st.success(f"✅ {msg}")
+                        else:
+                            st.error(f"❌ {msg}")
             
             st.markdown("")
             st.markdown("##### 🔍 Verifiera lösenord")
