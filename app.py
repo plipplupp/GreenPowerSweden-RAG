@@ -303,16 +303,7 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
     }
     
-    /* Fokusvy knapp grön (Söker på tooltip) */
-    div[data-testid="stTooltipHoverTarget"][title*="grön"] > button {
-        background-color: #4CAF50 !important;
-        border-color: #4CAF50 !important;
-        color: white !important;
-    }
-    div[data-testid="stTooltipHoverTarget"][title*="grön"] > button:hover {
-        background-color: #43A047 !important;
-        border-color: #43A047 !important;
-    }
+    /* Ta bort den gamla trasiga fokusvy-CSSen eftersom Streamlit inte stödjer färgning av enskilda knappar */
     
     div.row-widget.stButton > button[kind="secondary"]:hover {
         border-color: #2196F3;
@@ -377,7 +368,7 @@ def get_hf_token():
         pass
     return os.environ.get('HF_TOKEN') or os.environ.get('HF_WRITE_TOKEN')
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_resources():
     """Ladda embeddings och LLM"""
 
@@ -608,8 +599,8 @@ def show_references_section():
     st.header("📄 Källor & Dokument")
     
     # Knapp för att växla fokusvy
-    focus_label = "🏥 Lämna fokusvy (visa chatt)" if st.session_state.focus_mode else "🔍 Fokusvy (maximera dokument)"
-    if st.button(focus_label, type="secondary", use_container_width=True, help="grön"):
+    focus_label = "💬 Lämna fokusvy (visa chatt)" if st.session_state.focus_mode else "🔍 Fokusvy (maximera dokument)"
+    if st.button(focus_label, type="secondary", use_container_width=True):
         st.session_state.focus_mode = not st.session_state.focus_mode
         st.rerun()
     
