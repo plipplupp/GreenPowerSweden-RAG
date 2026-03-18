@@ -331,29 +331,39 @@ def generate_secrets_toml_snippet(users: dict) -> str:
 
 def update_secrets_file(users: dict):
     """Uppdatera [users]-sektionen i secrets.toml utan att röra övriga inställningar."""
-    SECRETS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Läs befintlig fil
-    existing_content = ""
-    if SECRETS_FILE.exists():
-        with open(SECRETS_FILE, "r", encoding="utf-8") as f:
-            existing_content = f.read()
-    
-    # Ta bort befintlig [users]-sektion (om den finns)
-    pattern = r'\[users\].*?(?=\n\[|\Z)'
-    cleaned = re.sub(pattern, '', existing_content, flags=re.DOTALL).strip()
-    
-    # Bygg ny [users]-sektion
-    users_section = "\n[users]\n"
-    for username, info in users.items():
-        hashed = info["password_hash"]
-        users_section += f'"{username}" = "{hashed}"\n'
-    
-    # Kombinera
-    new_content = cleaned + "\n\n" + users_section.strip() + "\n"
-    
-    with open(SECRETS_FILE, "w", encoding="utf-8") as f:
-        f.write(new_content.strip() + "\n")
+    # På Hugging Face Spaces är filesystemet read-only.
+    # Vi hoppar över detta steg där och litar på users.json synkroniseringen.
+    import os
+    if os.environ.get("SPACE_ID") or os.environ.get("STREAMLIT_RUNTIME_ENV") == "cloud":
+        return
+        
+    try:
+        SECRETS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Läs befintlig fil
+        existing_content = ""
+        if SECRETS_FILE.exists():
+            with open(SECRETS_FILE, "r", encoding="utf-8") as f:
+                existing_content = f.read()
+        
+        # Ta bort befintlig [users]-sektion (om den finns)
+        pattern = r'\[users\].*?(?=\n\[|\Z)'
+        cleaned = re.sub(pattern, '', existing_content, flags=re.DOTALL).strip()
+        
+        # Bygg ny [users]-sektion
+        users_section = "\n[users]\n"
+        for username, info in users.items():
+            hashed = info["password_hash"]
+            users_section += f'"{username}" = "{hashed}"\n'
+        
+        # Kombinera
+        new_content = cleaned + "\n\n" + users_section.strip() + "\n"
+        
+        with open(SECRETS_FILE, "w", encoding="utf-8") as f:
+            f.write(new_content.strip() + "\n")
+    except (OSError, PermissionError):
+        # Om vi ändå råkar på read-only miljö, ignorera felet
+        pass
 
 
 # ==========================================
