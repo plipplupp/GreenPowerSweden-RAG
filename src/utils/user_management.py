@@ -281,8 +281,10 @@ def create_user(username: str, password: str, role: str = "user",
     
     save_users(users)
     update_secrets_file(users)
-    sync_users_to_hf()
-    return True, f"Användare '{username_clean}' skapades!"
+    ok, sync_msg = sync_users_to_hf()
+    if not ok:
+        return True, f"Användare skapades lokalt, men kunde INTE laddas upp till molnet: {sync_msg}"
+    return True, f"Användare '{username_clean}' skapades och molnsynkroniserades!"
 
 
 def reset_user_password(username: str, new_password: str) -> tuple[bool, str]:
@@ -299,8 +301,10 @@ def reset_user_password(username: str, new_password: str) -> tuple[bool, str]:
     users[username]["updated_at"] = datetime.now().isoformat()
     save_users(users)
     update_secrets_file(users)
-    sync_users_to_hf()
-    return True, f"Lösenord uppdaterat för '{username}'."
+    ok, sync_msg = sync_users_to_hf()
+    if not ok:
+        return True, f"Lösenord uppdaterades lokalt, men kunde INTE laddas upp till molnet: {sync_msg}"
+    return True, f"Lösenord uppdaterat för '{username}' och molnsynkroniserades."
 
 
 def delete_user(username: str) -> tuple[bool, str]:
@@ -312,8 +316,10 @@ def delete_user(username: str) -> tuple[bool, str]:
     del users[username]
     save_users(users)
     update_secrets_file(users)
-    sync_users_to_hf()
-    return True, f"Användare '{username}' borttagen."
+    ok, sync_msg = sync_users_to_hf()
+    if not ok:
+        return True, f"Användaren togs bort lokalt, men kunde INTE laddas upp till molnet: {sync_msg}"
+    return True, f"Användare '{username}' borttagen och molnsynkroniserades."
 
 
 # ==========================================
