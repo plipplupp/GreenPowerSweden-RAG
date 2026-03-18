@@ -289,14 +289,14 @@ st.markdown("""
     
     /* Blå primärfärg istället för röd (gäller även formulär-knappar) */
     div.stButton > button[kind="primary"],
-    div[data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"] {
+    div[data-testid="stFormSubmitButton"] button {
         background-color: #2196F3 !important;
         border-color: #2196F3 !important;
         color: white !important;
         transition: all 0.2s ease;
     }
     div.stButton > button[kind="primary"]:hover,
-    div[data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"]:hover {
+    div[data-testid="stFormSubmitButton"] button:hover {
         background-color: #1976D2 !important;
         border-color: #1976D2 !important;
         color: white !important;
@@ -396,36 +396,16 @@ def load_resources():
         encode_kwargs={'normalize_embeddings': False}
     )
    
-    if not DB_DIR.exists():
-            if IS_CLOUD:
-                with st.spinner("📥 Laddar ner och packar upp vektordatabasen... (Detta sker bara en gång)"):
-                    # Anropa funktionen med en container för att visa loggar
-                    status_placeholder = st.empty()
-                    success, error_msg = download_and_extract_vectordb(st_container=status_placeholder)
-                    
-                    if not success:
-                        st.error(f"❌ Misslyckades att ladda ner databasen från Hugging Face: {error_msg}")
-                        st.info("Tips: Kontrollera att ditt HF_TOKEN i Secrets har läsrättigheter till datasetet 'greenpowersweden/solveig-db'.")
-                        return None, None
-                    else:
-                        st.toast("✅ Databas laddad!")
-            else:
-                # Om vi är lokalt och den saknas
-                st.error(f"⚠️ Kunde inte hitta vektordatabasen på: {DB_DIR}")
-                return None, None
-    
     try:
         vectordb = Chroma(
             persist_directory=str(DB_DIR),
             embedding_function=embedding_model
         )
     except Exception as e:
-        st.error(f"Fel vid laddning av vektordatabas: {e}")
         return None, None
    
     api_key = get_api_key()
     if not api_key:
-        st.error("⚠️ Google API-nyckel saknas. Konfigurera GOOGLE_API_KEY i secrets eller .env")
         return vectordb, None
     
     llm = ChatGoogleGenerativeAI(
@@ -436,7 +416,25 @@ def load_resources():
    
     return vectordb, llm
 
+# Förbered DB om den inte existerar
+if not DB_DIR.exists():
+    if IS_CLOUD:
+        with st.spinner("📥 Laddar ner och packar upp vektordatabasen... (Detta sker bara en gång)"):
+            success, error_msg = download_and_extract_vectordb()
+            if not success:
+                st.error(f"❌ Misslyckades att ladda ner databasen från Hugging Face: {error_msg}")
+                st.info("Tips: Kontrollera att ditt HF_TOKEN i Secrets har läsrättigheter till datasetet 'greenpowersweden/solveig-db'.")
+            else:
+                st.toast("✅ Databas laddad!")
+    else:
+        st.error(f"⚠️ Kunde inte hitta vektordatabasen på: {DB_DIR}")
+
 vectordb, llm = load_resources()
+
+if vectordb is None:
+    st.error("Fel vid laddning av vektordatabas. Starta om tjänsten.")
+if llm is None:
+    st.error("⚠️ Google API-nyckel saknas. Konfigurera GOOGLE_API_KEY i secrets eller .env")
 
 # ==========================================
 # 3. PDF-HANTERING FÖR MOLNET
