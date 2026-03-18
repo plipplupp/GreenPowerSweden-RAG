@@ -819,6 +819,10 @@ def show_admin_page():
         st.markdown("")
         st.subheader("Skapa ny användare")
         
+        # Trigger för att nollställa formulär
+        if "admin_form_trigger" not in st.session_state:
+            st.session_state.admin_form_trigger = 0
+            
         col_form, col_preview = st.columns([3, 2], gap="large")
         
         with col_form:
@@ -826,7 +830,7 @@ def show_admin_page():
                 "Användarnamn",
                 placeholder="t.ex. anna.svensson",
                 help="Användarnamnet kan innehålla bokstäver, siffror, punkt och understreck.",
-                key="admin_new_username"
+                key=f"admin_new_username_{st.session_state.admin_form_trigger}"
             )
             
             # Lösenordsgenerator
@@ -842,7 +846,7 @@ def show_admin_page():
                     placeholder="Minst 8 tecken...",
                     help="Lösenordet hashas med bcrypt innan det sparas.",
                     label_visibility="collapsed",
-                    key="admin_new_password"
+                    key=f"admin_new_password_{st.session_state.admin_form_trigger}"
                 )
             with col_pw_gen:
                 if st.button("☀️ Generera", use_container_width=True, key="gen_pw_btn"):
@@ -862,7 +866,7 @@ def show_admin_page():
                 "Bekräfta lösenord",
                 type="password",
                 placeholder="Upprepa lösenordet...",
-                key="admin_confirm_password"
+                key=f"admin_confirm_password_{st.session_state.admin_form_trigger}"
             )
             
             st.caption("🔒 Rollen sätts alltid till Användare. Skapa admins via det fristående `admin.py`-verktyget.")
@@ -907,9 +911,8 @@ def show_admin_page():
                 if ok:
                     st.success(f"✅ {msg} Secrets.toml uppdaterades automatiskt.")
                     st.balloons()
-                    for key in ["admin_new_username", "admin_new_password", "admin_confirm_password"]:
-                        if key in st.session_state:
-                            del st.session_state[key]
+                    # Nollställ formulär genom att ändra nyckeln
+                    st.session_state.admin_form_trigger += 1
                     time.sleep(2.0)
                     st.rerun()
                 else:

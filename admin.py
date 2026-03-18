@@ -353,12 +353,16 @@ def main():
         
         col_form, col_preview = st.columns([3, 2], gap="large")
         
+        # Trigger för att nollställa formulär
+        if "form_trigger" not in st.session_state:
+            st.session_state.form_trigger = 0
+            
         with col_form:
             new_username = st.text_input(
                 "Användarnamn",
                 placeholder="t.ex. anna.svensson",
                 help="Användarnamnet kan innehålla bokstäver, siffror, punkt och understreck.",
-                key="admintool_new_username"
+                key=f"admintool_new_username_{st.session_state.form_trigger}"
             )
             
             # Lösenordsgenerator
@@ -374,7 +378,7 @@ def main():
                     placeholder="Minst 8 tecken...",
                     help="Lösenordet hashas med bcrypt innan det sparas.",
                     label_visibility="collapsed",
-                    key="admintool_new_password"
+                    key=f"admintool_new_password_{st.session_state.form_trigger}"
                 )
             with col_pw_gen:
                 if st.button("☀️ Generera", use_container_width=True, key="gen_pw_btn"):
@@ -394,14 +398,15 @@ def main():
                 "Bekräfta lösenord",
                 type="password",
                 placeholder="Upprepa lösenordet...",
-                key="admintool_confirm_password"
+                key=f"admintool_confirm_password_{st.session_state.form_trigger}"
             )
             
             new_role = st.selectbox(
                 "Roll",
                 options=["user", "admin"],
                 format_func=lambda x: "👤 Användare" if x == "user" else "🔧 Administratör",
-                help="Administratörer har tillgång till admin-funktioner i Solveig."
+                help="Administratörer har tillgång till admin-funktioner i Solveig.",
+                key=f"admintool_role_{st.session_state.form_trigger}"
             )
         
         with col_preview:
@@ -443,9 +448,8 @@ def main():
                 if ok:
                     st.markdown(f'<div class="success-box">✅ {msg} Secrets.toml uppdaterades automatiskt!</div>', unsafe_allow_html=True)
                     st.balloons()
-                    for key in ["admintool_new_username", "admintool_new_password", "admintool_confirm_password"]:
-                        if key in st.session_state:
-                            del st.session_state[key]
+                    # Nollställ formulär genom att ändra nyckeln
+                    st.session_state.form_trigger += 1
                     time.sleep(2.0)
                     st.rerun()
                 else:
