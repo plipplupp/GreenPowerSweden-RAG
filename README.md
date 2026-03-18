@@ -89,7 +89,7 @@ pinned: false
 │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐     │
 │  │  Inloggning  │→ │ Sök & Analys │  │  Skapa Ansökan     │     │
 │  └──────────────┘  └──────────────┘  └────────────────────┘     │
-└─────────────────────────────────────────────────────────────────┐
+└─────────────────────────────────────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
@@ -97,7 +97,7 @@ pinned: false
 │                                                                 │
 │  1. QUERY PROCESSING                                            │
 │     ↓                                                           │
-│  2. EMBEDDING (HuggingFace all-mpnet-base-v2)                   │
+│  2. EMBEDDING (BAAI/bge-m3)                                     │
 │     ↓                                                           │
 │  3. VECTOR SEARCH (ChromaDB)                                    │
 │     ↓                                                           │
@@ -108,7 +108,7 @@ pinned: false
 │  6. LLM GENERATION (Google Gemini 2.0 Flash)                    │
 │     ↓                                                           │
 │  7. RESPONSE + SOURCES                                          │
-└─────────────────────────────────────────────────────────────────┐
+└─────────────────────────────────────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
@@ -174,7 +174,7 @@ green_power_sweden/
 - **RAG-ramverk:** LangChain
 - **Vektordatabas:** ChromaDB
 - **LLM:** Google Gemini 2.0 Flash
-- **Embeddings:** HuggingFace `all-mpnet-base-v2`
+- **Embeddings:** BAAI `BAAI/bge-m3`
 - **Data Hosting:** Hugging Face Datasets (för PDFer)
 
 ---
