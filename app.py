@@ -57,6 +57,7 @@ def check_authentication():
 
 def login_page():
     """Visa inloggningssida"""
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
     st.markdown("<h1 style='text-align:center'>🔐 Logga in till Solveig</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align:center; color:#555;'>Din AI-assistent för tillståndsprocesser och solcellsparker</h3>", unsafe_allow_html=True)
     
