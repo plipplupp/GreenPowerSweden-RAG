@@ -423,11 +423,12 @@ def get_llm(key_index=0):
     selected_key = api_keys[idx]
     
     return ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",       # Stabil produktionsmodell – 15 RPM / 1M context window
+        # Baserat på din AI Studio-lista (2025/2026):
+        model="gemini-3.1-flash-lite", 
         temperature=0.3,
         google_api_key=selected_key,
-        max_retries=1,          # Minimera LangChains egna retries
-        timeout=60,             # Rejäl timeout för att undvika 504 vid stora sökningar
+        max_retries=1,
+        timeout=60,
     )
 
 # Förbered DB om den inte existerar
@@ -606,13 +607,13 @@ def get_rag_response(question, system_prompt, k=10):
     
     # Alla nycklar är slut / alla försök misslyckades
     print("[Solveig] Alla försök misslyckades. Returnerar servicemeddelande.")
-    st.toast("❌ Alla API-nycklar är för tillfället upptagna.", icon="🔧")
+    st.toast("❌ Kvoten för Google API är uppnådd.", icon="🔧")
     return (
-        "🔧 **Solveig är tillfälligt överbelastad**\n\n"
-        "AI-tjänsten från Google svarar inte på någon av våra reservnycklar just nu. Det beror sannolikt på:\n"
-        "- **Hög global belastning** hos Google Gemini.\n"
-        "- **Rate limit** – vi har ställt många frågor väldigt snabbt.\n\n"
-        "**Tips:** Vänta 60 sekunder och prova igen. Då brukar kvoten ha nollställts!"
+        "🔧 **Rate limit uppnådd för Google Gemini**\n\n"
+        "AI-tjänsten svarar att kvoten är slut. Det här kan bero på:\n"
+        "- **Projekt-gräns:** Om dina API-nycklar ligger i samma Google-projekt delar de på samma RPM (15/min).\n"
+        "- **Global belastning:** Ibland begränsar Google anropen tillfälligt.\n\n"
+        "**Lösning:** Vänta en minut och försök igen. För högre kapacitet i framtiden kan du lägga till nycklar från *olika* Google-projekt."
     ), docs
 
 # ==========================================
