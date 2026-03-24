@@ -426,7 +426,8 @@ def get_llm(key_index=0):
         model="gemini-3.1-flash-lite-preview",
         temperature=0.3,
         google_api_key=selected_key,
-        max_retries=1  # Minimera LangChains egna retries för att spara quota
+        max_retries=1,          # Minimera LangChains egna retries för att spara quota
+        request_timeout=30,     # Max 30 sek per anrop – förhindrar oändlig hängning
     )
 
 # Förbered DB om den inte existerar
@@ -568,32 +569,33 @@ def get_rag_response(question, system_prompt, k=10):
     if len(api_keys) > 1:
         st.session_state.api_key_index = (st.session_state.api_key_index + 1) % len(api_keys)
     
-    # Försök anropa LLM med rotation vid Rate Limit
-    max_rotation_attempts = len(api_keys)
-    current_attempt = 0
+    # Försök anropa LLM – rotera nycklar vid fel, max en gång per nyckel
+    num_keys = len(api_keys)
     
-    while current_attempt < max_rotation_attempts:
+    for attempt in range(num_keys):
+        current_key_idx = (st.session_state.api_key_index + attempt) % num_keys
+        print(f"[Solveig] LLM-anrop försök {attempt + 1}/{num_keys}, nyckelindex={current_key_idx}")
         try:
-            llm = get_llm(st.session_state.api_key_index)
+            llm = get_llm(current_key_idx)
             chain = prompt | llm | StrOutputParser()
             answer = chain.invoke({"context": context_text, "question": question})
+            # Spara index för nästa anrop (proaktiv rotation)
+            st.session_state.api_key_index = (current_key_idx + 1) % num_keys
             return answer, docs
         except Exception as e:
             error_str = str(e)
-            if "429" in error_str or "ResourceExhausted" in error_str:
-                if len(api_keys) > 1:
-                    # Vid fel: Växla till nästa nyckel och försök igen
-                    st.session_state.api_key_index = (st.session_state.api_key_index + 1) % len(api_keys)
-                    current_attempt += 1
-                    # Vänta lite innan nästa försök med ny nyckel
-                    time.sleep(1)
-                    continue
-                else:
-                    return "⚠️ Rate limit nådd för Google API (15 requests per minut). Vänta en minut och försök igen.", docs
+            print(f"[Solveig] Fel vid anrop (försök {attempt + 1}): {error_str[:200]}")
+            if "429" in error_str or "ResourceExhausted" in error_str or "Timeout" in error_str:
+                # Fortsätt till nästa nyckel
+                time.sleep(1)
+                continue
             else:
-                return f"⚠️ Ett fel uppstod vid anrop till LLM: {error_str}", docs
+                # Oväntat fel – returnera direkt utan att prova fler nycklar
+                return f"⚠️ Ett fel uppstod: {error_str[:300]}", docs
     
-    return "⚠️ Alla API-nycklar har nått sin rate limit. Vänta en minut och försök igen.", docs
+    # Alla nycklar är slut
+    print("[Solveig] Alla API-nycklar är uttömda. Rate limit nådd.")
+    return "⚠️ Rate limit nådd för alla API-nycklar. Vänta en minut och försök igen.", docs
 
 # ==========================================
 # 5. SIDA: CHATT
