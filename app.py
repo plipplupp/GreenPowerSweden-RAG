@@ -423,11 +423,11 @@ def get_llm(key_index=0):
     selected_key = api_keys[idx]
     
     return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-lite",   # Stabil produktionsmodell (ej preview) – 30 RPM / 1500 RPD på free tier
+        model="gemini-1.5-flash",       # Stabil produktionsmodell – 15 RPM / 1M context window
         temperature=0.3,
         google_api_key=selected_key,
-        max_retries=1,          # Minimera LangChains egna retries för att spara quota
-        timeout=45,             # Max 45 sek per anrop – förhindrar oändlig hängning
+        max_retries=1,          # Minimera LangChains egna retries
+        timeout=60,             # Rejäl timeout för att undvika 504 vid stora sökningar
     )
 
 # Förbered DB om den inte existerar
@@ -521,24 +521,18 @@ def show_pdf_or_message(doc_path, page_num):
 # 4. RAG FUNKTIONER
 # ==========================================
 
-def format_docs_with_sources(docs, max_chars_per_chunk=800):
-    """Formaterar hämtade dokument för LLM-prompt.
-    max_chars_per_chunk: Begänsar hur många tecken per chunk som skickas till AI:n
-    (2000-teckens chunks skulle göra prompten för stor för preview-modellen).
-    """
+def format_docs_with_sources(docs):
+    """Formaterar hämtade dokument för LLM-prompt."""
     formatted_texts = []
     for i, doc in enumerate(docs):
         path = doc.metadata.get("full_path", "Okänd fil")
         page = doc.metadata.get("page", "?")
-        content = doc.page_content[:max_chars_per_chunk]  # Trúncera vid behöv
+        content = doc.page_content
         formatted_texts.append(f"DOKUMENT ID [{i+1}]:\nSökväg: {path} (Sida {page})\nINNEHÅLL: {content}\n----------------")
     return "\n\n".join(formatted_texts)
 
-def get_rag_response(question, system_prompt, k=5):
-    """Hämtar relevanta dokument och frågar LLM.
-    k=5: Vi hämtar 5 chunks istället för 10 för att hålla kontexten
-    inom gränserna för gemini-flash-lite-preview (undviker 500/504-fel).
-    """
+def get_rag_response(question, system_prompt, k=10):
+    """Hämtar relevanta dokument och frågar LLM."""
     if not vectordb:
         return "⚠️ Vektordatabasen är inte laddad.", []
     
@@ -548,7 +542,7 @@ def get_rag_response(question, system_prompt, k=5):
 
     retriever = vectordb.as_retriever(search_kwargs={"k": k})
     docs = retriever.invoke(question)
-    context_text = format_docs_with_sources(docs)  # Max 800 tecken/chunk x 5 = ~4 000 tecken total
+    context_text = format_docs_with_sources(docs)
    
     prompt_template = f"""
     {system_prompt}
@@ -612,13 +606,13 @@ def get_rag_response(question, system_prompt, k=5):
     
     # Alla nycklar är slut / alla försök misslyckades
     print("[Solveig] Alla försök misslyckades. Returnerar servicemeddelande.")
-    st.toast("❌ Googles AI-tjänst svarar inte på någon av nycklarna just nu.", icon="🔧")
+    st.toast("❌ Alla API-nycklar är för tillfället upptagna.", icon="🔧")
     return (
-        "🔧 **Solveig är tillfälligt otillgänglig**\n\n"
-        "Googles AI-tjänst svarar inte just nu. Det kan bero på:\n"
-        "- **Serverfel hos Google (500/503)** – deras servrar är tillfälligt överlastade\n"
-        "- **Rate limit** – för många anrop de senaste minuterna\n\n"
-        "Det här är ett fel hos Google, inte i Solveig. Försök igen om någon minut!"
+        "🔧 **Solveig är tillfälligt överbelastad**\n\n"
+        "AI-tjänsten från Google svarar inte på någon av våra reservnycklar just nu. Det beror sannolikt på:\n"
+        "- **Hög global belastning** hos Google Gemini.\n"
+        "- **Rate limit** – vi har ställt många frågor väldigt snabbt.\n\n"
+        "**Tips:** Vänta 60 sekunder och prova igen. Då brukar kvoten ha nollställts!"
     ), docs
 
 # ==========================================
