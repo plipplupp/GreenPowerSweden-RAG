@@ -251,7 +251,7 @@ if "focus_mode" not in st.session_state:
 st.markdown("""
 <style>
     .block-container {
-        padding-top: 3.5rem !important;
+        padding-top: 1.5rem !important;
     }
     section[data-testid="stSidebar"] button {
         width: 200px !important;
@@ -423,7 +423,6 @@ def get_llm(key_index=0):
     selected_key = api_keys[idx]
     
     return ChatGoogleGenerativeAI(
-        # Baserat på din AI Studio-lista (2025/2026):
         model="gemini-3.1-flash-lite-preview", 
         temperature=0.3,
         google_api_key=selected_key,
@@ -490,6 +489,14 @@ def get_pdf_path(relative_path):
         # Lokalt: Använd den befintliga sökvägen
         return RAW_DATA_DIR / relative_path
 
+def is_domar_path(path_str):
+    """Kontrollera om dokumentet är i den begränsade mappen 'domar' (GDPR)."""
+    if not path_str:
+        return False
+    # Normalisera separatorer och kolla om 'domar' finns med
+    normalized = str(path_str).replace("\\", "/").lower()
+    return "/domar/" in normalized or normalized.startswith("domar/")
+
 def show_pdf_or_message(doc_path, page_num):
     """Visa PDF om tillgänglig, annars visa hjälpsamt meddelande"""
     if doc_path is None or not doc_path.exists():
@@ -552,6 +559,10 @@ def get_rag_response(question, system_prompt, k=10):
     1. Granska den tillhandahållna kontexten noggrant.
     2. Om kontexten INTE innehåller **relevant** information som kan besvara FRÅGAN, svara då: "Jag har granskat de tillhandahållna dokumenten och kan konstatera att det inte finns tillräcklig information om [ämnet i frågan] i dessa."
     3. Svara ALDRIG på en fråga om kontexten är tom eller irrelevant.
+
+    VIKTIGA INSTRUKTIONER FÖR INTEGRITET:
+    1. Skriv ALDRIG ut namn på privatpersoner, även om de förekommer i dokumenten.
+    2. Om ett namn är relevant för sammanhanget, beskriv personens roll istället (t.ex. "sökanden", "fastighetsägaren", "käranden").
 
     VIKTIGA INSTRUKTIONER FÖR KÄLLOR (endast om svar kan ges):
     1. Du har tillgång till numrerade dokument, t.ex. "DOKUMENT ID [1]".
@@ -707,49 +718,94 @@ def show_references_section():
                 citation_id = i + 1
                 path_str = doc.metadata.get("full_path")
                 page_num = doc.metadata.get("page")
+                filename = Path(path_str).name if path_str else "okänd.pdf"
                 
-                # Bestäm sökväg för listvisning (utan att ladda ner i molnet än)
+                # Kontrollera GDPR-begränsning (domar-mappen) – admin ser allt
+                is_admin = is_admin_cloud(st.session_state.get("username", ""))
+                restricted = is_domar_path(path_str) and not is_admin
+
+                # Bestäm sökväg (lokal eller relativ för molnet)
                 if IS_CLOUD:
-                    # I molnet sparar vi bara den relativa sökvägen tills användaren klickar
-                    local_ref_path = path_str 
+                    local_ref_path = path_str
                 else:
-                    # Lokalt kan vi kolla sökvägen direkt
                     local_ref_path = RAW_DATA_DIR / path_str
                 
                 with st.container():
+                    # Visa om dokumentet är begränsat
+                    if restricted:
+                        label_extra = " 🔒"
+                    else:
+                        label_extra = ""
                     st.markdown(f"""
                     <div class="source-card">
-                        <b>[Källa {citation_id}] {Path(path_str).name}</b><br>
+                        <b>[Källa {citation_id}] {filename}{label_extra}</b><br>
                         <span style="color:#555; font-size:0.9em;">Sida {page_num}</span>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    c_open, c_path, c_text = st.columns([1, 1, 1])
+                    c_open, c_path, c_text, c_dl = st.columns([1, 1, 1, 1])
                     
                     with c_open:
-                        if st.button(f"📄 Visa källa", key=f"open_{i}"):
-                            if IS_CLOUD:
-                                with st.spinner("📥 Hämtar dokument..."):
-                                    actual_path = get_pdf_path(path_str)
-                                    if actual_path:
-                                        st.session_state.selected_pdf = actual_path
-                                        st.session_state.selected_page = page_num
-                                        st.rerun()
-                                    else:
-                                        st.error("Kunde inte hämta dokumentet från molnet.")
-                            else:
-                                st.session_state.selected_pdf = local_ref_path
-                                st.session_state.selected_page = page_num
-                                st.rerun()
+                        if restricted:
+                            with st.popover("🚫 Visa källa"):
+                                st.warning(
+                                    "🔒 **GDPR-begränsning**\n\n"
+                                    "Det här dokumentet innehåller information som är skyddad enligt GDPR "
+                                    "och kan inte visas av säkerhetsskäl. Dokumentet hämtas bort och "
+                                    "ersätts med en maskad version inom kort."
+                                )
+                        else:
+                            if st.button(f"📄 Visa källa", key=f"open_{i}"):
+                                if IS_CLOUD:
+                                    with st.spinner("📥 Hämtar dokument..."):
+                                        actual_path = get_pdf_path(path_str)
+                                        if actual_path:
+                                            st.session_state.selected_pdf = actual_path
+                                            st.session_state.selected_page = page_num
+                                            st.rerun()
+                                        else:
+                                            st.error("Kunde inte hämta dokumentet från molnet.")
+                                else:
+                                    st.session_state.selected_pdf = local_ref_path
+                                    st.session_state.selected_page = page_num
+                                    st.rerun()
                     
                     with c_path:
-                        if is_admin_cloud(st.session_state.username):
+                        if is_admin_cloud(st.session_state.get("username", "")):
                             with st.popover("📂 Visa sökväg"):
                                 st.code(path_str, language="text")
                             
                     with c_text:
                         with st.popover("📝 Läs avsnitt"):
                             st.caption(doc.page_content)
+
+                    with c_dl:
+                        if restricted:
+                            # Visa grå knapp som förklaring om att nedladdning inte är tillgänglig
+                            with st.popover("🚫 Ladda ner"):
+                                st.warning(
+                                    "🔒 **Ej tillgänglig**\n\n"
+                                    "Nedladdning av detta dokument är tillfälligt begränsad av GDPR-skäl."
+                                )
+                        else:
+                            # Hämta bytes vid klick (cachas av hf_hub_download)
+                            dl_key = f"dl_bytes_{i}"
+                            if st.button("⬇️ Ladda ner", key=f"dl_btn_{i}"):
+                                with st.spinner("Förbereder..."):
+                                    pdf_path = get_pdf_path(path_str) if IS_CLOUD else (RAW_DATA_DIR / path_str)
+                                    if pdf_path and Path(pdf_path).exists():
+                                        st.session_state[dl_key] = Path(pdf_path).read_bytes()
+                                        st.rerun()
+                                    else:
+                                        st.error("Kunde inte hämta filen.")
+                            if dl_key in st.session_state:
+                                st.download_button(
+                                    label="📥 Spara PDF",
+                                    data=st.session_state[dl_key],
+                                    file_name=filename,
+                                    mime="application/pdf",
+                                    key=f"dl_save_{i}",
+                                )
 
                     st.markdown("")
     else:
