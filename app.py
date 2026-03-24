@@ -68,7 +68,7 @@ def login_page():
         with st.form(key="login_form", clear_on_submit=False):
             username = st.text_input("Användarnamn")
             password = st.text_input("Lösenord", type="password")
-            submitted = st.form_submit_button("Logga in", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Logga in", type="primary", width="stretch")
             
         if submitted:
             # Hämta användaruppgifter
@@ -585,17 +585,26 @@ def get_rag_response(question, system_prompt, k=10):
         except Exception as e:
             error_str = str(e)
             print(f"[Solveig] Fel vid anrop (försök {attempt + 1}): {error_str[:200]}")
-            if "429" in error_str or "ResourceExhausted" in error_str or "Timeout" in error_str:
-                # Fortsätt till nästa nyckel
+            
+            # Tillfälliga fel (rate limit, serversidan hos Google, timeout) -> rotera nyckel och försök igen
+            is_transient = any(code in error_str for code in ["429", "500", "503", "ResourceExhausted", "Timeout", "ServiceUnavailable", "InternalServerError"])
+            
+            if is_transient:
                 time.sleep(1)
                 continue
             else:
-                # Oväntat fel – returnera direkt utan att prova fler nycklar
-                return f"⚠️ Ett fel uppstod: {error_str[:300]}", docs
+                # Oväntat fel (t.ex. ogiltig nyckel) – returnera direkt utan att prova fler nycklar
+                return f"⚠️ Oväntat fel vid AI-anrop: {error_str[:300]}", docs
     
-    # Alla nycklar är slut
-    print("[Solveig] Alla API-nycklar är uttömda. Rate limit nådd.")
-    return "⚠️ Rate limit nådd för alla API-nycklar. Vänta en minut och försök igen.", docs
+    # Alla nycklar är slut / alla försök misslyckades
+    print("[Solveig] Alla försök misslyckades. Returnerar servicemed delande.")
+    return (
+        "🔧 **Solveig är tillfälligt otillgänglig**\n\n"
+        "Googles AI-tjänst svarar inte just nu. Det kan bero på:\n"
+        "- Tillfällig hög belastning hos Google (vanligt med preview-modeller)\n"
+        "- Rate limit uppnådd – försök gärna igen om en minut\n\n"
+        "_Felet är hos Google, inte i Solveig. Försök igen snart!_"
+    ), docs
 
 # ==========================================
 # 5. SIDA: CHATT
@@ -660,7 +669,7 @@ def show_references_section():
     
     # Knapp för att växla fokusvy
     focus_label = "💬 Lämna fokusvy (visa chatt)" if st.session_state.focus_mode else "🔍 Fokusvy (maximera dokument)"
-    if st.button(focus_label, type="primary", use_container_width=True):
+    if st.button(focus_label, type="primary", width="stretch"):
         st.session_state.focus_mode = not st.session_state.focus_mode
         st.rerun()
     
@@ -828,9 +837,9 @@ def show_application_page():
                     file_name=f"Ansokan_{safe_name}.md",
                     mime="text/markdown",
                     type="primary",
-                    use_container_width=True
+                    width="stretch"
                 )
-                if st.button("🗑️ Rensa Genererat Utkast", use_container_width=True, type="secondary"):
+                if st.button("🗑️ Rensa Genererat Utkast", width="stretch", type="secondary"):
                     st.session_state.application_draft = ""
                     st.rerun()
 
@@ -907,7 +916,7 @@ def show_admin_page():
                     key=f"admin_new_password_{st.session_state.admin_form_trigger}"
                 )
             with col_pw_gen:
-                if st.button("☀️ Generera", use_container_width=True, key="gen_pw_btn"):
+                if st.button("☀️ Generera", width="stretch", key="gen_pw_btn"):
                     st.session_state.generated_passwords = generate_multiple_passwords(5)
             
             # Visa genererade lösenord
@@ -958,7 +967,7 @@ def show_admin_page():
         
         st.markdown("")
         
-        if st.button("✅ Skapa användare", type="primary", use_container_width=True, key="admin_create_btn"):
+        if st.button("✅ Skapa användare", type="primary", width="stretch", key="admin_create_btn"):
             # Rollen är alltid 'user' inifrån appen – admins skapas via admin.py
             if not new_password:
                 st.error("Lösenord får inte vara tomt.")
@@ -1058,7 +1067,7 @@ def show_admin_page():
                     placeholder="Bekräfta..."
                 )
                 
-                if st.button("🔄 Uppdatera lösenord", use_container_width=True, key="app_reset_btn"):
+                if st.button("🔄 Uppdatera lösenord", width="stretch", key="app_reset_btn"):
                     if not new_pw:
                         st.error("Ange ett nytt lösenord.")
                     elif new_pw != confirm_pw:
@@ -1101,7 +1110,7 @@ def show_admin_page():
                         placeholder=f"Skriv {del_user_sel}..."
                     )
                     
-                    if st.button("🗑️ Ta bort", type="secondary", use_container_width=True, key="app_delete_btn"):
+                    if st.button("🗑️ Ta bort", type="secondary", width="stretch", key="app_delete_btn"):
                         if confirm_del == del_user_sel:
                             ok, msg = delete_user(del_user_sel)
                             if ok:
@@ -1138,7 +1147,7 @@ def show_admin_page():
                 )
             with col_b2:
                 st.markdown("##### 🚀 Manuellt tvinga synkronisering")
-                if st.button("Ladda upp till molnet", use_container_width=True):
+                if st.button("Ladda upp till molnet", width="stretch"):
                     with st.spinner("Laddar upp..."):
                         from src.utils.user_management import sync_users_to_hf
                         ok, msg = sync_users_to_hf()
@@ -1165,7 +1174,7 @@ def show_admin_page():
                     placeholder="Skriv lösenordet..."
                 )
             
-            if st.button("🔍 Verifiera", use_container_width=True, key="app_verify_btn"):
+            if st.button("🔍 Verifiera", width="stretch", key="app_verify_btn"):
                 if verify_pw and verify_user in users:
                     if verify_password_bcrypt(verify_pw, users[verify_user]["password_hash"]):
                         st.success("✅ Lösenordet är korrekt!")
@@ -1183,7 +1192,7 @@ def main():
 
     with st.sidebar:
         if LOGO_PATH.exists():
-            st.image(str(LOGO_PATH), use_container_width=True)
+            st.image(str(LOGO_PATH), width="stretch")
         else:
             st.header("Chatboten Solveig")
         
