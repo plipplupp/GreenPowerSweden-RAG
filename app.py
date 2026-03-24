@@ -423,11 +423,11 @@ def get_llm(key_index=0):
     selected_key = api_keys[idx]
     
     return ChatGoogleGenerativeAI(
-        model="gemini-3.1-flash-lite-preview",
+        model="gemini-2.0-flash-lite",   # Stabil produktionsmodell (ej preview) – 30 RPM / 1500 RPD på free tier
         temperature=0.3,
         google_api_key=selected_key,
         max_retries=1,          # Minimera LangChains egna retries för att spara quota
-        request_timeout=30,     # Max 30 sek per anrop – förhindrar oändlig hängning
+        timeout=45,             # Max 45 sek per anrop – förhindrar oändlig hängning
     )
 
 # Förbered DB om den inte existerar
