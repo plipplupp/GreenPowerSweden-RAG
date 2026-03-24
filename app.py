@@ -351,13 +351,24 @@ st.markdown("""
 # ==========================================
 
 def get_api_key():
-    """Hämta API-nyckel från secrets eller environment"""
+    """Hämta API-nyckel eller lista av nycklar från secrets eller environment"""
     try:
         if hasattr(st, 'secrets') and 'GOOGLE_API_KEY' in st.secrets:
-            return st.secrets['GOOGLE_API_KEY']
+            keys = st.secrets['GOOGLE_API_KEY']
+            if isinstance(keys, str) and "," in keys:
+                return [k.strip() for k in keys.split(",")]
+            elif isinstance(keys, list):
+                return keys
+            return [keys]
     except:
         pass
-    return os.environ.get('GOOGLE_API_KEY')
+    
+    env_keys = os.environ.get('GOOGLE_API_KEY')
+    if env_keys:
+        if "," in env_keys:
+            return [k.strip() for k in env_keys.split(",")]
+        return [env_keys]
+    return []
 
 # Hämta Hugging Face Token
 def get_hf_token():
@@ -374,7 +385,7 @@ def get_hf_token():
 
 @st.cache_resource(show_spinner=False)
 def load_resources():
-    """Ladda embeddings och LLM"""
+    """Ladda embeddings och initiera vektordatabasen (LLM skapas nu dynamiskt för att tillåta rotation)"""
 
     # Detektera enhet (GPU/MPS/CPU)
     if torch.backends.mps.is_available():
@@ -397,19 +408,26 @@ def load_resources():
             embedding_function=embedding_model
         )
     except Exception as e:
-        return None, None
+        return None
    
-    api_key = get_api_key()
-    if not api_key:
-        return vectordb, None
+    return vectordb
+
+def get_llm(key_index=0):
+    """Skapar en LLM-instans med en specifik nyckel eller den nuvarande från session_state"""
+    api_keys = get_api_key()
+    if not api_keys:
+        return None
     
-    llm = ChatGoogleGenerativeAI(
+    # Säkerställ att vi inte går utanför listan
+    idx = key_index % len(api_keys)
+    selected_key = api_keys[idx]
+    
+    return ChatGoogleGenerativeAI(
         model="gemini-3.1-flash-lite-preview",
         temperature=0.3,
-        google_api_key=api_key
+        google_api_key=selected_key,
+        max_retries=1  # Minimera LangChains egna retries för att spara quota
     )
-   
-    return vectordb, llm
 
 # Förbered DB om den inte existerar
 if not DB_DIR.exists():
@@ -425,12 +443,15 @@ if not DB_DIR.exists():
     else:
         st.error(f"⚠️ Kunde inte hitta vektordatabasen på: {DB_DIR}")
 
-vectordb, llm = load_resources()
+vectordb = load_resources()
+
+if "api_key_index" not in st.session_state:
+    st.session_state.api_key_index = 0
 
 if vectordb is None:
     st.error("Fel vid laddning av vektordatabas. Starta om tjänsten.")
-if llm is None:
-    st.error("⚠️ Google API-nyckel saknas. Konfigurera GOOGLE_API_KEY i secrets eller .env")
+
+# LLM hämtas nu vid behov via get_llm()
 
 # ==========================================
 # 3. PDF-HANTERING FÖR MOLNET
@@ -509,9 +530,13 @@ def format_docs_with_sources(docs):
     return "\n\n".join(formatted_texts)
 
 def get_rag_response(question, system_prompt, k=10):
-    if not vectordb or not llm:
-        return "⚠️ Systemet är inte korrekt konfigurerat. Kontakta administratören.", []
+    if not vectordb:
+        return "⚠️ Vektordatabasen är inte laddad.", []
     
+    api_keys = get_api_key()
+    if not api_keys:
+        return "⚠️ Google API-nyckel saknas. Konfigurera GOOGLE_API_KEY i secrets eller .env", []
+
     retriever = vectordb.as_retriever(search_kwargs={"k": k})
     docs = retriever.invoke(question)
     context_text = format_docs_with_sources(docs)
@@ -538,9 +563,37 @@ def get_rag_response(question, system_prompt, k=10):
     """
    
     prompt = ChatPromptTemplate.from_template(prompt_template)
-    chain = prompt | llm | StrOutputParser()
-    answer = chain.invoke({"context": context_text, "question": question})
-    return answer, docs
+    
+    # Proaktiv rotation: Växla till nästa nyckel inför varje anrop för att sprida lasten
+    if len(api_keys) > 1:
+        st.session_state.api_key_index = (st.session_state.api_key_index + 1) % len(api_keys)
+    
+    # Försök anropa LLM med rotation vid Rate Limit
+    max_rotation_attempts = len(api_keys)
+    current_attempt = 0
+    
+    while current_attempt < max_rotation_attempts:
+        try:
+            llm = get_llm(st.session_state.api_key_index)
+            chain = prompt | llm | StrOutputParser()
+            answer = chain.invoke({"context": context_text, "question": question})
+            return answer, docs
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str or "ResourceExhausted" in error_str:
+                if len(api_keys) > 1:
+                    # Vid fel: Växla till nästa nyckel och försök igen
+                    st.session_state.api_key_index = (st.session_state.api_key_index + 1) % len(api_keys)
+                    current_attempt += 1
+                    # Vänta lite innan nästa försök med ny nyckel
+                    time.sleep(1)
+                    continue
+                else:
+                    return "⚠️ Rate limit nådd för Google API (15 requests per minut). Vänta en minut och försök igen.", docs
+            else:
+                return f"⚠️ Ett fel uppstod vid anrop till LLM: {error_str}", docs
+    
+    return "⚠️ Alla API-nycklar har nått sin rate limit. Vänta en minut och försök igen.", docs
 
 # ==========================================
 # 5. SIDA: CHATT
@@ -742,6 +795,7 @@ def show_application_page():
                 for i, d in enumerate(docs_loc):
                     full_draft_text += f"- [{i+1}] {d.metadata.get('full_path')} (Sid {d.metadata.get('page')})\n"
                 
+                # Liten paus för att inte slå i rate limit
                 time.sleep(2)
             
             with st.status("🌱 Del 2/2: Tar fram skyddsåtgärder...", expanded=True):
