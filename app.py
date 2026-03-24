@@ -521,16 +521,24 @@ def show_pdf_or_message(doc_path, page_num):
 # 4. RAG FUNKTIONER
 # ==========================================
 
-def format_docs_with_sources(docs):
+def format_docs_with_sources(docs, max_chars_per_chunk=800):
+    """Formaterar hämtade dokument för LLM-prompt.
+    max_chars_per_chunk: Begänsar hur många tecken per chunk som skickas till AI:n
+    (2000-teckens chunks skulle göra prompten för stor för preview-modellen).
+    """
     formatted_texts = []
     for i, doc in enumerate(docs):
         path = doc.metadata.get("full_path", "Okänd fil")
         page = doc.metadata.get("page", "?")
-        content = doc.page_content
+        content = doc.page_content[:max_chars_per_chunk]  # Trúncera vid behöv
         formatted_texts.append(f"DOKUMENT ID [{i+1}]:\nSökväg: {path} (Sida {page})\nINNEHÅLL: {content}\n----------------")
     return "\n\n".join(formatted_texts)
 
-def get_rag_response(question, system_prompt, k=10):
+def get_rag_response(question, system_prompt, k=5):
+    """Hämtar relevanta dokument och frågar LLM.
+    k=5: Vi hämtar 5 chunks istället för 10 för att hålla kontexten
+    inom gränserna för gemini-flash-lite-preview (undviker 500/504-fel).
+    """
     if not vectordb:
         return "⚠️ Vektordatabasen är inte laddad.", []
     
@@ -540,7 +548,7 @@ def get_rag_response(question, system_prompt, k=10):
 
     retriever = vectordb.as_retriever(search_kwargs={"k": k})
     docs = retriever.invoke(question)
-    context_text = format_docs_with_sources(docs)
+    context_text = format_docs_with_sources(docs)  # Max 800 tecken/chunk x 5 = ~4 000 tecken total
    
     prompt_template = f"""
     {system_prompt}
