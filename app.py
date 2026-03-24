@@ -434,7 +434,7 @@ def get_llm(key_index=0):
 if not DB_DIR.exists():
     if IS_CLOUD:
         st.markdown("<br>", unsafe_allow_html=True)
-        with st.spinner("📥 Laddar ner och packar upp vektordatabasen... (Detta sker bara en gång)"):
+        with st.spinner("📥 Laddar ner och packar upp vektordatabasen... (Detta sker bara vid nystart, tar ca 1 min)"):
             success, error_msg = download_and_extract_vectordb()
             if not success:
                 st.error(f"❌ Misslyckades att ladda ner databasen från Hugging Face: {error_msg}")
@@ -587,9 +587,15 @@ def get_rag_response(question, system_prompt, k=10):
             print(f"[Solveig] Fel vid anrop (försök {attempt + 1}): {error_str[:200]}")
             
             # Tillfälliga fel (rate limit, serversidan hos Google, timeout) -> rotera nyckel och försök igen
-            is_transient = any(code in error_str for code in ["429", "500", "503", "ResourceExhausted", "Timeout", "ServiceUnavailable", "InternalServerError"])
+            is_rate_limit = "429" in error_str or "ResourceExhausted" in error_str
+            is_server_error = any(code in error_str for code in ["500", "503", "Timeout", "ServiceUnavailable", "InternalServerError"])
             
-            if is_transient:
+            if is_rate_limit or is_server_error:
+                if attempt < num_keys - 1:
+                    # Visa en diskret toast-notis om rotationen om vi har fler nycklar att prova
+                    if num_keys > 1:
+                        reason = "Rate limit nådd" if is_rate_limit else "Googles server svarar inte"
+                        st.toast(f"🔄 {reason} – provar reservnyckel ({attempt + 2}/{num_keys})...", icon="⚠️")
                 time.sleep(1)
                 continue
             else:
@@ -597,13 +603,14 @@ def get_rag_response(question, system_prompt, k=10):
                 return f"⚠️ Oväntat fel vid AI-anrop: {error_str[:300]}", docs
     
     # Alla nycklar är slut / alla försök misslyckades
-    print("[Solveig] Alla försök misslyckades. Returnerar servicemed delande.")
+    print("[Solveig] Alla försök misslyckades. Returnerar servicemeddelande.")
+    st.toast("❌ Googles AI-tjänst svarar inte på någon av nycklarna just nu.", icon="🔧")
     return (
         "🔧 **Solveig är tillfälligt otillgänglig**\n\n"
         "Googles AI-tjänst svarar inte just nu. Det kan bero på:\n"
-        "- Tillfällig hög belastning hos Google (vanligt med preview-modeller)\n"
-        "- Rate limit uppnådd – försök gärna igen om en minut\n\n"
-        "_Felet är hos Google, inte i Solveig. Försök igen snart!_"
+        "- **Serverfel hos Google (500/503)** – deras servrar är tillfälligt överlastade\n"
+        "- **Rate limit** – för många anrop de senaste minuterna\n\n"
+        "Det här är ett fel hos Google, inte i Solveig. Försök igen om någon minut!"
     ), docs
 
 # ==========================================
