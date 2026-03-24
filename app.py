@@ -171,9 +171,9 @@ def is_admin_cloud(username):
 
 
 def logout():
-    """Logga ut användaren"""
-    st.session_state.authenticated = False
-    st.session_state.username = None
+    """Logga ut användaren och rensa all historik"""
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
     st.rerun()
 
 # ==========================================
@@ -293,14 +293,14 @@ st.markdown("""
     
     /* Blå primärfärg istället för röd (gäller även formulär-knappar) */
     div.stButton > button[kind="primary"],
-    div[data-testid="stFormSubmitButton"] button {
+    div[data-testid="stFormSubmitButton"] button[kind="primary"] {
         background-color: #2196F3 !important;
         border-color: #2196F3 !important;
         color: white !important;
         transition: all 0.2s ease;
     }
     div.stButton > button[kind="primary"]:hover,
-    div[data-testid="stFormSubmitButton"] button:hover {
+    div[data-testid="stFormSubmitButton"] button[kind="primary"]:hover {
         background-color: #1976D2 !important;
         border-color: #1976D2 !important;
         color: white !important;
@@ -1133,7 +1133,7 @@ def show_admin_page():
                     placeholder="Bekräfta..."
                 )
                 
-                if st.button("🔄 Uppdatera lösenord", width="stretch", key="app_reset_btn"):
+                if st.button("🔄 Uppdatera lösenord", type="primary", width="stretch", key="app_reset_btn"):
                     if not new_pw:
                         st.error("Ange ett nytt lösenord.")
                     elif new_pw != confirm_pw:
@@ -1146,6 +1146,9 @@ def show_admin_page():
                             st.rerun()
                         else:
                             st.error(f"❌ {msg}")
+                
+                # Extra utrymme så att statusmeddelanden syns bättre
+                st.markdown("<br><br>", unsafe_allow_html=True)
             
             with col_action2:
                 st.markdown("**🗑️ Ta bort användare**")
@@ -1176,7 +1179,7 @@ def show_admin_page():
                         placeholder=f"Skriv {del_user_sel}..."
                     )
                     
-                    if st.button("🗑️ Ta bort", type="secondary", width="stretch", key="app_delete_btn"):
+                    if st.button("🗑️ Ta bort", type="primary", width="stretch", key="app_delete_btn"):
                         if confirm_del == del_user_sel:
                             ok, msg = delete_user(del_user_sel)
                             if ok:
@@ -1196,7 +1199,7 @@ def show_admin_page():
         if not users:
             st.info("Inga användare att visa ännu. Skapa en användare först!")
         else:
-            st.success("☁️ **Automatisk molnsynkning:** Alla ändringar du gör i användare synkroniseras nu automatiskt till en säker databas på Hugging Face. Du behöver inte längre manuellt kopiera lösenord!")
+            st.success("☁️ **Automatisk molnsynkning:** Alla ändringar du gör i användare synkroniseras nu automatiskt till en säker databas på Hugging Face.")
             
             st.markdown("")
             col_b1, col_b2 = st.columns(2)
