@@ -424,7 +424,7 @@ def get_llm(key_index=0):
     
     return ChatGoogleGenerativeAI(
         # Baserat på din AI Studio-lista (2025/2026):
-        model="gemini-3.1-flash-lite", 
+        model="gemini-3.1-flash-lite-preview", 
         temperature=0.3,
         google_api_key=selected_key,
         max_retries=1,
