@@ -1,5 +1,5 @@
 # Kärnan
-streamlit==1.40.1
+streamlit
 pandas
 python-dotenv
 bcrypt==5.0.0
