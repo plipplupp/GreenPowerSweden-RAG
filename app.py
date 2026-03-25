@@ -743,7 +743,13 @@ def show_references_section():
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    c_open, c_path, c_text, c_dl = st.columns([1, 1, 1, 1])
+                    # Dynamisk layout för knappar beroende på vy
+                    if st.session_state.focus_mode:
+                        # I fokusvy: Samla knappar till vänster
+                        c_open, c_path, c_text, c_dl, c_spacer = st.columns([1, 1, 1, 1, 4])
+                    else:
+                        # I sidopanel: Kompakt layout för 4 knappar
+                        c_open, c_path, c_text, c_dl = st.columns([1, 1, 1.2, 1])
                     
                     with c_open:
                         if restricted:
@@ -755,7 +761,7 @@ def show_references_section():
                                     "ersätts med en maskad version inom kort."
                                 )
                         else:
-                            if st.button(f"📄 Visa källa", key=f"open_{i}"):
+                            if st.button(f"📄 Visa", key=f"open_{i}"):
                                 if IS_CLOUD:
                                     with st.spinner("📥 Hämtar dokument..."):
                                         actual_path = get_pdf_path(path_str)
@@ -772,17 +778,17 @@ def show_references_section():
                     
                     with c_path:
                         if is_admin_cloud(st.session_state.get("username", "")):
-                            with st.popover("📂 Visa sökväg"):
+                            with st.popover("📂 Sökväg"):
                                 st.code(path_str, language="text")
                             
                     with c_text:
-                        with st.popover("📝 Läs avsnitt"):
+                        with st.popover("📖 Avsnitt"):
                             st.caption(doc.page_content)
 
                     with c_dl:
                         if restricted:
                             # Visa grå knapp som förklaring om att nedladdning inte är tillgänglig
-                            with st.popover("🚫 Ladda ner"):
+                            with st.popover("🚫 Hämta"):
                                 st.warning(
                                     "🔒 **Ej tillgänglig**\n\n"
                                     "Nedladdning av detta dokument är tillfälligt begränsad av GDPR-skäl."
@@ -790,7 +796,7 @@ def show_references_section():
                         else:
                             # Hämta bytes vid klick (cachas av hf_hub_download)
                             dl_key = f"dl_bytes_{i}"
-                            if st.button("⬇️ Ladda ner", key=f"dl_btn_{i}"):
+                            if st.button("⬇️ Hämta", key=f"dl_btn_{i}"):
                                 with st.spinner("Förbereder..."):
                                     pdf_path = get_pdf_path(path_str) if IS_CLOUD else (RAW_DATA_DIR / path_str)
                                     if pdf_path and Path(pdf_path).exists():
