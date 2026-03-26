@@ -187,19 +187,27 @@ st.set_page_config(
 )
 
 if "users_synced" not in st.session_state:
+    print("[Solveig] Startar synkning av användare...")
     try:
         from src.utils.user_management import sync_users_from_hf
         ok, msg = sync_users_from_hf()
         if not ok:
+            print(f"[Solveig] Fel vid synkning: {msg}")
             st.error(f"Molnsynkning misslyckades vid uppstart: {msg}")
+        else:
+            print("[Solveig] Användarsynkning klar.")
     except Exception as e:
+        print(f"[Solveig] Undantag vid synkning: {e}")
         st.error(f"Ett oväntat fel skedde vid synkning: {e}")
     st.session_state.users_synced = True
 
 # Kontrollera autentisering FÖRST
+print("[Solveig] Kontrollerar autentisering...")
 if not check_authentication():
+    print("[Solveig] Inte inloggad. Visar login-sidan.")
     login_page()
     st.stop()
+print(f"[Solveig] Inloggad som: {st.session_state.get('username')}")
 
 # --- TUNGA IMPORTER (Händer bara efter inlogg) ---
 import torch
@@ -307,7 +315,13 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
     }
     
-    /* Ta bort den gamla trasiga fokusvy-CSSen eftersom Streamlit inte stödjer färgning av enskilda knappar */
+    /* Multiline-stöd för knappar (t.ex. ikon på första raden, text på andra) */
+    div[data-testid="stButton"] button p,
+    div[data-testid="stPopover"] button p {
+        white-space: pre-line !important;
+        line-height: 1.4 !important;
+        text-align: center !important;
+    }
     
     div.row-widget.stButton > button[kind="secondary"]:hover {
         border-color: #2196F3;
@@ -386,6 +400,7 @@ def get_hf_token():
 @st.cache_resource(show_spinner=False)
 def load_resources():
     """Ladda embeddings och initiera vektordatabasen (LLM skapas nu dynamiskt för att tillåta rotation)"""
+    print("[Solveig] load_resources() startar...")
 
     # Detektera enhet (GPU/MPS/CPU)
     if torch.backends.mps.is_available():
@@ -753,7 +768,7 @@ def show_references_section():
                     
                     with c_open:
                         if restricted:
-                            with st.popover("🚫 Visa källa"):
+                            with st.popover("🚫\nVisa"):
                                 st.warning(
                                     "🔒 **GDPR-begränsning**\n\n"
                                     "Det här dokumentet innehåller information som är skyddad enligt GDPR "
@@ -761,7 +776,7 @@ def show_references_section():
                                     "ersätts med en maskad version inom kort."
                                 )
                         else:
-                            if st.button(f"📄 Visa", key=f"open_{i}"):
+                            if st.button(f"📄\nVisa", key=f"open_{i}"):
                                 if IS_CLOUD:
                                     with st.spinner("📥 Hämtar dokument..."):
                                         actual_path = get_pdf_path(path_str)
@@ -778,17 +793,17 @@ def show_references_section():
                     
                     with c_path:
                         if is_admin_cloud(st.session_state.get("username", "")):
-                            with st.popover("📂 Sökväg"):
+                            with st.popover("📂\nSökväg"):
                                 st.code(path_str, language="text")
                             
                     with c_text:
-                        with st.popover("📖 Avsnitt"):
+                        with st.popover("📖\nAvsnitt"):
                             st.caption(doc.page_content)
 
                     with c_dl:
                         if restricted:
                             # Visa grå knapp som förklaring om att nedladdning inte är tillgänglig
-                            with st.popover("🚫 Hämta"):
+                            with st.popover("🚫\nHämta"):
                                 st.warning(
                                     "🔒 **Ej tillgänglig**\n\n"
                                     "Nedladdning av detta dokument är tillfälligt begränsad av GDPR-skäl."
@@ -796,7 +811,7 @@ def show_references_section():
                         else:
                             # Hämta bytes vid klick (cachas av hf_hub_download)
                             dl_key = f"dl_bytes_{i}"
-                            if st.button("⬇️ Hämta", key=f"dl_btn_{i}"):
+                            if st.button("⬇️\nHämta", key=f"dl_btn_{i}"):
                                 with st.spinner("Förbereder..."):
                                     pdf_path = get_pdf_path(path_str) if IS_CLOUD else (RAW_DATA_DIR / path_str)
                                     if pdf_path and Path(pdf_path).exists():
