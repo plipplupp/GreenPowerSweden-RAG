@@ -1295,7 +1295,7 @@ def main():
 
     with st.sidebar:
         if LOGO_PATH.exists():
-            st.image(str(LOGO_PATH), use_container_width=True)
+            st.image(str(LOGO_PATH), width="stretch")
         else:
             st.header("Chatboten Solveig")
         
