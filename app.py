@@ -323,6 +323,16 @@ st.markdown("""
         text-align: center !important;
         min-width: 65px !important;
     }
+
+    /* Ta bort expansions-knappen på loggan och andra bilder */
+    button[data-testid="stImageFullscreenButton"] {
+        display: none !important;
+    }
+    
+    /* Ta bort den genomskinliga rutan som dyker upp vid hovring för expansion */
+    [data-testid="stImage"] > div:first-child {
+        cursor: default !important;
+    }
     
     div.row-widget.stButton > button[kind="secondary"]:hover {
         border-color: #2196F3;
