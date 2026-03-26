@@ -324,14 +324,13 @@ st.markdown("""
         min-width: 65px !important;
     }
 
-    /* Ta bort expansions-knappen på loggan och andra bilder */
-    button[data-testid="stImageFullscreenButton"] {
+    /* Totalt förbud mot expansionsknappen och verktygsfältet på bilder (Streamlit 1.35+) */
+    [data-testid="stElementToolbar"],
+    [data-testid="stElementToolbarButtonContainer"],
+    [data-testid="stElementToolbarButton"],
+    button[aria-label="Fullscreen"] {
         display: none !important;
-    }
-    
-    /* Ta bort den genomskinliga rutan som dyker upp vid hovring för expansion */
-    [data-testid="stImage"] > div:first-child {
-        cursor: default !important;
+        visibility: hidden !important;
     }
     
     div.row-widget.stButton > button[kind="secondary"]:hover {
@@ -1296,7 +1295,7 @@ def main():
 
     with st.sidebar:
         if LOGO_PATH.exists():
-            st.image(str(LOGO_PATH), width="stretch")
+            st.image(str(LOGO_PATH), use_container_width=True)
         else:
             st.header("Chatboten Solveig")
         
