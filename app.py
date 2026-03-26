@@ -321,6 +321,7 @@ st.markdown("""
         white-space: pre-line !important;
         line-height: 1.4 !important;
         text-align: center !important;
+        min-width: 65px !important;
     }
     
     div.row-widget.stButton > button[kind="secondary"]:hover {
@@ -761,10 +762,10 @@ def show_references_section():
                     # Dynamisk layout för knappar beroende på vy
                     if st.session_state.focus_mode:
                         # I fokusvy: Samla knappar till vänster
-                        c_open, c_path, c_text, c_dl, c_spacer = st.columns([1, 1, 1, 1, 4])
+                        c_open, c_text, c_dl, c_path, c_spacer = st.columns([1, 1, 1, 1, 4])
                     else:
-                        # I sidopanel: Kompakt layout för 4 knappar
-                        c_open, c_path, c_text, c_dl = st.columns([1, 1, 1.2, 1])
+                        # I sidopanel: Kompakt layout för 4 knappar (Sökväg sist för att undvika hål)
+                        c_open, c_text, c_dl, c_path = st.columns([1, 1, 1, 1])
                     
                     with c_open:
                         if restricted:
@@ -791,11 +792,6 @@ def show_references_section():
                                     st.session_state.selected_page = page_num
                                     st.rerun()
                     
-                    with c_path:
-                        if is_admin_cloud(st.session_state.get("username", "")):
-                            with st.popover("📂\nSökväg"):
-                                st.code(path_str, language="text")
-                            
                     with c_text:
                         with st.popover("📖\nAvsnitt"):
                             st.caption(doc.page_content)
@@ -815,18 +811,26 @@ def show_references_section():
                                 with st.spinner("Förbereder..."):
                                     pdf_path = get_pdf_path(path_str) if IS_CLOUD else (RAW_DATA_DIR / path_str)
                                     if pdf_path and Path(pdf_path).exists():
-                                        st.session_state[dl_key] = Path(pdf_path).read_bytes()
-                                        st.rerun()
+                                        try:
+                                            with open(pdf_path, "rb") as f:
+                                                st.session_state[dl_key] = f.read()
+                                        except Exception as e:
+                                            st.error(f"Kunde inte läsa filen: {e}")
                                     else:
-                                        st.error("Kunde inte hämta filen.")
+                                        st.error("Kunde inte hitta källfilen.")
+                                
                             if dl_key in st.session_state:
                                 st.download_button(
-                                    label="📥 Spara PDF",
+                                    label="📥\nSpara PDF",
                                     data=st.session_state[dl_key],
                                     file_name=filename,
                                     mime="application/pdf",
-                                    key=f"dl_save_{i}",
                                 )
+
+                    with c_path:
+                        if is_admin_cloud(st.session_state.get("username", "")):
+                            with st.popover("📂\nSökväg"):
+                                st.code(path_str, language="text")
 
                     st.markdown("")
     else:
