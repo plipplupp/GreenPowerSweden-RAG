@@ -784,9 +784,9 @@ def show_references_section():
                             with st.popover("🚫\nVisa"):
                                 st.warning(
                                     "🔒 **GDPR-begränsning**\n\n"
-                                    "Det här dokumentet innehåller information som är skyddad enligt GDPR "
-                                    "och kan inte visas av säkerhetsskäl. Dokumentet hämtas bort och "
-                                    "ersätts med en maskad version inom kort."
+                                    "Det här dokumentet innehåller information som är skyddad enligt GDPR. "
+                                    "Vi arbetar med att gå igenom och maskera dessa filer för att "
+                                    "ersätta dem med en maskad version inom kort."
                                 )
                         else:
                             if st.button(f"📄\nVisa", key=f"open_{i}"):
@@ -813,8 +813,10 @@ def show_references_section():
                             # Visa grå knapp som förklaring om att nedladdning inte är tillgänglig
                             with st.popover("🚫\nHämta"):
                                 st.warning(
-                                    "🔒 **Ej tillgänglig**\n\n"
-                                    "Nedladdning av detta dokument är tillfälligt begränsad av GDPR-skäl."
+                                    "🔒 **GDPR-begränsning**\n\n"
+                                    "Nedladdning av detta dokument är tillfälligt begränsad av GDPR-skäl. "
+                                    "Vi arbetar med att gå igenom och maskera dessa filer för att "
+                                    "ersätta dem med en maskad version inom kort."
                                 )
                         else:
                             # Hämta bytes vid klick (cachas av hf_hub_download)
