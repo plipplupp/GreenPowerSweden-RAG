@@ -472,7 +472,10 @@ if not DB_DIR.exists():
 vectordb = load_resources()
 
 if "api_key_index" not in st.session_state:
-    st.session_state.api_key_index = 0
+    import random
+    api_keys = get_api_key()
+    # Starta på ett slumpmässigt ställe för att sprida lasten (viktigt om vi har många sessioner)
+    st.session_state.api_key_index = random.randint(0, max(0, len(api_keys) - 1)) if api_keys else 0
 
 if vectordb is None:
     st.error("Fel vid laddning av vektordatabas. Starta om tjänsten.")
@@ -647,9 +650,9 @@ def get_rag_response(question, system_prompt, k=10):
     return (
         "🔧 **Rate limit uppnådd för Google Gemini**\n\n"
         "AI-tjänsten svarar att kvoten är slut. Det här kan bero på:\n"
-        "- **Projekt-gräns:** Om dina API-nycklar ligger i samma Google-projekt delar de på samma RPM (15/min).\n"
+        "- **Projekt-gräns:** Om API-nycklar ligger i samma Google-projekt delar de på samma RPM (15/min).\n"
         "- **Global belastning:** Ibland begränsar Google anropen tillfälligt.\n\n"
-        "**Lösning:** Vänta en minut och försök igen. För högre kapacitet i framtiden kan du lägga till nycklar från *olika* Google-projekt."
+        "**Lösning:** Vänta en minut och försök igen."
     ), docs
 
 # ==========================================
